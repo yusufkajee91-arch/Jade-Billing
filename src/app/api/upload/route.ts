@@ -1,0 +1,64 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/lib/auth'
+import { writeFile, mkdir } from 'fs/promises'
+import path from 'path'
+
+const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10 MB
+const ALLOWED_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+]
+
+export async function POST(request: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  }
+
+  const formData = await request.formData()
+  const file = formData.get('file') as File | null
+
+  if (!file) {
+    return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+  }
+
+  if (file.size > MAX_FILE_SIZE) {
+    return NextResponse.json(
+      { error: 'File size exceeds the 10 MB limit' },
+      { status: 400 },
+    )
+  }
+
+  if (!ALLOWED_TYPES.includes(file.type)) {
+    return NextResponse.json(
+      { error: 'File type not allowed' },
+      { status: 400 },
+    )
+  }
+
+  const uploadsDir = path.join(process.cwd(), 'public', 'uploads')
+  await mkdir(uploadsDir, { recursive: true })
+
+  const ext = path.extname(file.name)
+  const baseName = path.basename(file.name, ext).replace(/[^a-zA-Z0-9-_]/g, '-')
+  const fileName = `${Date.now()}-${baseName}${ext}`
+  const filePath = path.join(uploadsDir, fileName)
+
+  const buffer = Buffer.from(await file.arrayBuffer())
+  await writeFile(filePath, buffer)
+
+  return NextResponse.json({
+    filePath: `/uploads/${fileName}`,
+    fileName: file.name,
+    fileSize: file.size,
+  })
+}
