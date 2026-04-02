@@ -3,6 +3,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { apiLogger } from '@/lib/debug'
+
+const log = apiLogger('diary')
 
 const createSchema = z.object({
   matterId: z.string().min(1, 'Matter is required'),
@@ -15,8 +18,12 @@ const createSchema = z.object({
 
 // GET /api/diary?from=YYYY-MM-DD&to=YYYY-MM-DD&scope=mine|all&isCompleted=true|false
 export async function GET(request: NextRequest) {
+  log.info('GET request received')
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  if (!session) {
+    log.warn('GET unauthorised — no session')
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  }
 
   const { searchParams } = new URL(request.url)
   const from = searchParams.get('from')
@@ -24,6 +31,8 @@ export async function GET(request: NextRequest) {
   const scope = searchParams.get('scope') ?? 'mine'
   const isCompletedParam = searchParams.get('isCompleted')
   const isAdmin = session.user.role === 'admin'
+
+  log.debug('GET query params:', { from, to, scope, isCompleted: isCompletedParam, isAdmin })
 
   try {
     const entries = await prisma.diaryEntry.findMany({
@@ -51,6 +60,7 @@ export async function GET(request: NextRequest) {
       orderBy: [{ dueDate: 'asc' }, { createdAt: 'asc' }],
     })
 
+    log.info(`GET completed successfully — ${entries.length} entries returned`)
     return NextResponse.json(
       entries.map((e) => ({
         ...e,
@@ -60,22 +70,29 @@ export async function GET(request: NextRequest) {
       })),
     )
   } catch (err) {
-    console.error('[GET /api/diary]', err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })
+    log.error('GET failed:', err)
+    return NextResponse.json(
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined } : undefined },
+      { status: 500 },
+    )
   }
 }
 
 // POST /api/diary
 export async function POST(request: NextRequest) {
+  log.info('POST request received')
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  if (!session) {
+    log.warn('POST unauthorised — no session')
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  }
 
   const body = await request.json()
-  console.log('[POST /api/diary] body:', JSON.stringify(body))
+  log.debug('POST body:', body)
   const parsed = createSchema.safeParse(body)
   if (!parsed.success) {
     const details = parsed.error.flatten()
-    console.error('[POST /api/diary] validation failed:', JSON.stringify(details))
+    log.warn('POST validation failed:', details)
     return NextResponse.json({ error: 'Validation failed', details }, { status: 400 })
   }
 
@@ -104,6 +121,7 @@ export async function POST(request: NextRequest) {
       },
     })
 
+    log.info('POST completed successfully — entry created:', entry.id)
     return NextResponse.json(
       {
         ...entry,
@@ -113,7 +131,10 @@ export async function POST(request: NextRequest) {
       { status: 201 },
     )
   } catch (err) {
-    console.error('[POST /api/diary]', err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })
+    log.error('POST failed:', err)
+    return NextResponse.json(
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined } : undefined },
+      { status: 500 },
+    )
   }
 }

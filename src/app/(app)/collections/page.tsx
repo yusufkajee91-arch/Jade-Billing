@@ -4,6 +4,9 @@ import React, { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { CreditCard } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('CollectionsPage')
 
 interface DebtorInvoice {
   id: string
@@ -46,19 +49,24 @@ function fmtDate(s: string) {
 }
 
 export default function CollectionsPage() {
+  log.info('render')
   const [debtors, setDebtors] = useState<Debtor[]>([])
   const [grandTotal, setGrandTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const fetchData = useCallback(async () => {
+    log.info('fetching collections data')
     setLoading(true)
     try {
       const res = await fetch('/api/debtors')
       if (res.ok) {
         const data = await res.json()
+        log.info('collections data loaded', { debtorCount: data.debtors?.length ?? 0, grandTotal: data.grandTotal })
         setDebtors(data.debtors ?? [])
         setGrandTotal(data.grandTotal ?? 0)
+      } else {
+        log.error('failed to fetch collections data', { status: res.status })
       }
     } finally {
       setLoading(false)

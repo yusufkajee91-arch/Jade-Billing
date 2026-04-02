@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback, Fragment } from 'react'
 import { ChevronLeft, ChevronRight, Plus, Check, Pencil, Trash2, CalendarDays, List } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('DiaryView')
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -95,9 +98,11 @@ function EntryForm({ isAdmin, currentUserId, initial, defaultDate, onSaved, onCa
 
   const submit = async () => {
     if (!title.trim() || !dueDate || !matterId) {
+      log.warn('diary entry form validation failed', { hasTitle: !!title.trim(), hasDueDate: !!dueDate, hasMatterId: !!matterId })
       toast.error('Title, due date and matter are required')
       return
     }
+    log.info('submitting diary entry', { title, dueDate, matterId, isEdit: !!initial })
     setSaving(true)
     const url = initial ? `/api/diary/${initial.id}` : '/api/diary'
     const method = initial ? 'PATCH' : 'POST'
@@ -116,9 +121,11 @@ function EntryForm({ isAdmin, currentUserId, initial, defaultDate, onSaved, onCa
         ...(formErrors ?? []),
         ...Object.entries(fieldErrors ?? {}).flatMap(([f, msgs]) => msgs.map((m) => `${f}: ${m}`)),
       ]
+      log.error('diary entry save failed', { status: res.status, error: b.error, fieldErrors })
       toast.error(parts.length > 0 ? parts.join(' · ') : b.error ?? 'Failed to save entry')
       return
     }
+    log.info('diary entry saved successfully')
     onSaved(await res.json())
   }
 
@@ -336,6 +343,7 @@ const GLASS = {
 }
 
 export function DiaryView({ isAdmin, currentUserId }: { isAdmin: boolean; currentUserId: string }) {
+  log.info('mount', { isAdmin, currentUserId })
   const now = new Date()
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
@@ -348,12 +356,19 @@ export function DiaryView({ isAdmin, currentUserId }: { isAdmin: boolean; curren
   const [editingEntry, setEditingEntry] = useState<DiaryEntry | null>(null)
 
   const fetchEntries = useCallback(async () => {
+    log.debug('loading diary entries', { year, month, scope })
     setLoading(true)
     const from = `${year}-${String(month + 1).padStart(2, '0')}-01`
     const dim = daysInMonth(year, month)
     const to = `${year}-${String(month + 1).padStart(2, '0')}-${String(dim).padStart(2, '0')}`
     const res = await fetch(`/api/diary?from=${from}&to=${to}&scope=${scope}`)
-    if (res.ok) setEntries(await res.json())
+    if (res.ok) {
+      const data = await res.json()
+      log.info('diary entries loaded', { count: data.length, from, to })
+      setEntries(data)
+    } else {
+      log.warn('diary entries fetch failed', { status: res.status })
+    }
     setLoading(false)
   }, [year, month, scope])
 
@@ -380,6 +395,7 @@ export function DiaryView({ isAdmin, currentUserId }: { isAdmin: boolean; curren
   }
 
   const handleToggle = async (id: string, done: boolean) => {
+    log.info('toggling diary entry completion', { id, done })
     const res = await fetch(`/api/diary/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -387,20 +403,28 @@ export function DiaryView({ isAdmin, currentUserId }: { isAdmin: boolean; curren
     })
     if (res.ok) {
       const updated: DiaryEntry = await res.json()
+      log.debug('diary entry toggled', { id, isCompleted: updated.isCompleted })
       setEntries((prev) => prev.map((e) => (e.id === id ? updated : e)))
+    } else {
+      log.error('diary entry toggle failed', { id, status: res.status })
     }
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this diary entry?')) return
+    log.info('deleting diary entry', { id })
     const res = await fetch(`/api/diary/${id}`, { method: 'DELETE' })
     if (res.ok || res.status === 204) {
+      log.info('diary entry deleted', { id })
       setEntries((prev) => prev.filter((e) => e.id !== id))
       toast.success('Entry deleted')
+    } else {
+      log.error('diary entry delete failed', { id, status: res.status })
     }
   }
 
   const handleSaved = (entry: DiaryEntry) => {
+    log.info('diary entry saved', { id: entry.id, title: entry.title })
     setEntries((prev) => {
       const idx = prev.findIndex((e) => e.id === entry.id)
       if (idx >= 0) {

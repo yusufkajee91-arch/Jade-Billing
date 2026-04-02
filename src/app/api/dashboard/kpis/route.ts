@@ -2,12 +2,19 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { apiLogger } from '@/lib/debug'
+
+const log = apiLogger('dashboard/kpis')
 
 // GET /api/dashboard/kpis
 // Returns the 4 dashboard KPI values as live figures.
 export async function GET() {
+  log.info('GET request received')
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  if (!session) {
+    log.warn('GET rejected: unauthorised')
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  }
 
   try {
     const [trustIn, trustOut, unsentInv, draftBill, debtorsInv] = await Promise.all([
@@ -38,17 +45,20 @@ export async function GET() {
       }),
     ])
 
-    return NextResponse.json({
+    const result = {
       heldInTrustCents:
         (trustIn._sum.amountCents ?? 0) - (trustOut._sum.amountCents ?? 0),
       unsentInvoicesCents: unsentInv._sum.totalCents ?? 0,
       draftBillableCents: draftBill._sum.totalCents ?? 0,
       debtorsOutstandingCents: debtorsInv._sum.totalCents ?? 0,
-    })
+    }
+    log.debug('KPI results:', result)
+    log.info('GET completed successfully')
+    return NextResponse.json(result)
   } catch (err) {
-    console.error('[GET /api/dashboard/kpis]', err)
+    log.error('GET failed:', err)
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined } : undefined },
       { status: 500 },
     )
   }

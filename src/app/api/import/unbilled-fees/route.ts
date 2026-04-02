@@ -3,7 +3,10 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { matchFeeEarner } from '@/lib/import-utils'
+import { apiLogger } from '@/lib/debug'
 import * as XLSX from 'xlsx'
+
+const log = apiLogger('import/unbilled-fees')
 
 function str(val: unknown): string | null {
   if (val === null || val === undefined || val === '') return null
@@ -41,10 +44,15 @@ function parseDate(val: unknown): Date {
 // ─── DELETE: clear all historical unbilled fee entries ─────────────────────────
 
 export async function DELETE() {
+  log.info('DELETE request received')
   try {
     const session = await getServerSession(authOptions)
-    if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+    if (!session) {
+      log.warn('Unauthorized request — no session')
+      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+    }
     if (session.user.role !== 'admin') {
+      log.warn('Forbidden — user role is not admin', { role: session.user.role })
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -55,21 +63,29 @@ export async function DELETE() {
       },
     })
 
+    log.info('DELETE completed successfully', { deleted: result.count })
     return NextResponse.json({ deleted: result.count })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('[import/unbilled-fees DELETE] error:', msg)
-    return NextResponse.json({ error: msg }, { status: 500 })
+  } catch (error) {
+    log.error('DELETE failed:', error)
+    return NextResponse.json(
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined } : undefined },
+      { status: 500 }
+    )
   }
 }
 
 // ─── POST: import unbilled fees ───────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  log.info('POST request received')
   try {
     const session = await getServerSession(authOptions)
-    if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+    if (!session) {
+      log.warn('Unauthorized request — no session')
+      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+    }
     if (session.user.role !== 'admin') {
+      log.warn('Forbidden — user role is not admin', { role: session.user.role })
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -77,11 +93,13 @@ export async function POST(request: NextRequest) {
     try {
       formData = await request.formData()
     } catch {
+      log.warn('Invalid request — expected multipart/form-data')
       return NextResponse.json({ error: 'Expected multipart/form-data' }, { status: 400 })
     }
 
     const file = formData.get('file')
     if (!file || typeof file === 'string') {
+      log.warn('Missing or invalid file field')
       return NextResponse.json({ error: 'file is required' }, { status: 400 })
     }
 
@@ -89,11 +107,14 @@ export async function POST(request: NextRequest) {
     const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
     const sheetName = workbook.SheetNames[0]
     if (!sheetName) {
+      log.warn('No sheets found in uploaded file')
       return NextResponse.json({ error: 'No sheets found in file' }, { status: 422 })
     }
     const rows: Record<string, unknown>[] = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]!)
+    log.debug('File parsed:', { sheetName, rowCount: rows.length })
 
     if (rows.length === 0) {
+      log.warn('No data rows found in file')
       return NextResponse.json({ error: 'No data rows found' }, { status: 422 })
     }
 
@@ -116,6 +137,7 @@ export async function POST(request: NextRequest) {
       select: { id: true, code: true },
     })
     const postingCodeMap = new Map(postingCodes.map(p => [p.code, p.id]))
+    log.debug('Lookup data loaded:', { matters: matters.length, users: users.length, postingCodes: postingCodes.length })
 
     // ── Process rows ──────────────────────────────────────────────────────────
     let imported = 0
@@ -198,15 +220,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    log.info('POST completed successfully', { imported, skippedNoMatter: skippedNoMatter.length, errorCount: errors.length })
     return NextResponse.json({
       imported,
       skipped_no_matter: skippedNoMatter,
       skipped_duplicate: 0,
       errors,
     })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('[import/unbilled-fees] unhandled error:', msg)
-    return NextResponse.json({ error: msg }, { status: 500 })
+  } catch (error) {
+    log.error('POST failed:', error)
+    return NextResponse.json(
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined } : undefined },
+      { status: 500 }
+    )
   }
 }

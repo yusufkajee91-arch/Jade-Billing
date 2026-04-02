@@ -21,6 +21,9 @@ import {
 import { FicaBadge } from '@/components/ui/fica-badge'
 import { ClientForm } from '@/components/clients/client-form'
 import { formatEntityType } from '@/lib/entity-types'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('ClientsView')
 
 interface ClientListItem {
   id: string
@@ -68,6 +71,7 @@ function loadWidths(): Record<string, number> {
 }
 
 export function ClientsView() {
+  log.info('render')
   const router = useRouter()
   const [clients, setClients] = useState<ClientListItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -82,6 +86,7 @@ export function ClientsView() {
   const resizingRef = useRef<{ col: string; startX: number; startW: number } | null>(null)
 
   const fetchClients = useCallback(async () => {
+    log.info('fetching clients', { activeFilter })
     try {
       const params = new URLSearchParams()
       if (activeFilter !== 'all') params.set('active', activeFilter === 'active' ? 'true' : 'false')
@@ -90,8 +95,11 @@ export function ClientsView() {
         const body = await res.json().catch(() => ({}))
         throw new Error(body.error ?? 'Failed to load clients')
       }
-      setClients(await res.json())
+      const data = await res.json()
+      log.info('clients loaded', { count: data.length })
+      setClients(data)
     } catch (err) {
+      log.error('failed to load clients', err)
       toast.error(err instanceof Error ? err.message : 'Failed to load clients')
     } finally {
       setLoading(false)
@@ -194,11 +202,13 @@ export function ClientsView() {
   })
 
   const openCreate = () => {
+    log.info('opening create client form')
     setEditingClient(null)
     setSheetOpen(true)
   }
 
   const openEdit = (client: ClientListItem) => {
+    log.info('opening edit client form', { clientId: client.id, clientCode: client.clientCode })
     setEditingClient(client)
     setSheetOpen(true)
   }

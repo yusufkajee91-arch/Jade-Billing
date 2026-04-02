@@ -3,6 +3,9 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { FileText } from 'lucide-react'
 import { InvoiceListTable } from './invoice-list-table'
+import { pageLogger } from '@/lib/debug'
+
+const log = pageLogger('invoices')
 
 const GLASS: React.CSSProperties = {
   background: 'rgba(255,252,250,0.62)',
@@ -14,8 +17,10 @@ const GLASS: React.CSSProperties = {
 }
 
 export default async function InvoicesPage() {
+  log.info('Rendering invoices page')
   const session = await getServerSession(authOptions)
   const isAdmin = session?.user?.role === 'admin'
+  log.debug('User role:', { isAdmin, userId: session?.user?.id })
 
   const where: Record<string, unknown> = {}
   if (!isAdmin) {
@@ -55,7 +60,9 @@ export default async function InvoicesPage() {
     paidAt: inv.paidAt instanceof Date ? inv.paidAt.toISOString() : inv.paidAt ? String(inv.paidAt) : null,
   }))
 
+  log.info('Invoices loaded:', { total: invoices.length })
   const draftCount = invoices.filter((i) => i.status === 'draft_pro_forma' || i.status === 'draft_invoice').length
+  log.debug('Invoice stats:', { total: invoices.length, drafts: draftCount })
 
   return (
     <div style={{ width: '100%', paddingTop: '16px' }}>

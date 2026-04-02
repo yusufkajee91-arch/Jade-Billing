@@ -5,6 +5,9 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { SettingsNav } from '@/components/layout/settings-nav'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('ImportDataPage')
 
 const GLASS: React.CSSProperties = {
   background: 'rgba(255,252,250,0.62)',
@@ -235,6 +238,7 @@ function ImportPanel({ typeDef, resultKey }: { typeDef: ImportTypeDef; resultKey
       return
     }
 
+    log.info('starting import', { endpoint: typeDef.endpoint, fileName: file.name, size: file.size })
     setUploading(true)
     setResult(null)
     setError(null)
@@ -247,17 +251,20 @@ function ImportPanel({ typeDef, resultKey }: { typeDef: ImportTypeDef; resultKey
       const data = await res.json()
 
       if (!res.ok) {
+        log.error('import failed', { status: res.status, error: data.error })
         setError(data.error || 'Import failed')
         toast.error(data.error || 'Import failed')
         return
       }
 
+      log.info('import completed', data)
       setResult(data)
       const count =
         'invoices_imported' in data ? data.invoices_imported :
         'imported' in data ? data.imported : 0
       toast.success(`Imported ${count} records`)
-    } catch {
+    } catch (err) {
+      log.error('import network error', err)
       setError('Network error — please try again')
       toast.error('Network error — please try again')
     } finally {
@@ -274,6 +281,7 @@ function ImportPanel({ typeDef, resultKey }: { typeDef: ImportTypeDef; resultKey
     if (!typeDef.clearEndpoint) return
     if (!confirm('This will delete all previously imported historical unbilled entries, then re-import from the selected file. Continue?')) return
 
+    log.info('clearing and re-importing', { clearEndpoint: typeDef.clearEndpoint })
     setClearing(true)
     setResult(null)
     setError(null)
@@ -283,13 +291,16 @@ function ImportPanel({ typeDef, resultKey }: { typeDef: ImportTypeDef; resultKey
       const delData = await delRes.json()
 
       if (!delRes.ok) {
+        log.error('clear failed', { status: delRes.status, error: delData.error })
         setError(delData.error || 'Failed to clear entries')
         toast.error(delData.error || 'Failed to clear entries')
         return
       }
 
+      log.info('entries cleared', { deleted: delData.deleted })
       toast.success(`Cleared ${delData.deleted} historical entries`)
-    } catch {
+    } catch (err) {
+      log.error('clear network error', err)
       setError('Network error clearing entries')
       toast.error('Network error clearing entries')
       return
@@ -409,6 +420,7 @@ function ImportPanel({ typeDef, resultKey }: { typeDef: ImportTypeDef; resultKey
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ImportDataPage() {
+  log.info('render')
   const { data: session, status } = useSession()
   const router = useRouter()
   const [selected, setSelected] = useState<ImportTypeKey | ''>('')

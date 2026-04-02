@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/console-capture'
 import { createClient, createMatter } from '../helpers/api-factories'
 import { uniqueCode, uniqueSuffix } from '../helpers/test-data'
 
@@ -66,10 +66,19 @@ test.describe('Global Search', () => {
     // The command palette input placeholder uses a unicode ellipsis
     const paletteInput = page.getByPlaceholder('Search matters, clients, actions\u2026')
     await expect(paletteInput).toBeVisible({ timeout: 5000 })
+    const searchResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/search?q=Acme') &&
+        response.request().method() === 'GET',
+    )
     await paletteInput.fill('Acme')
+    const response = await searchResponse
+    expect(response.ok()).toBeTruthy()
 
     // Command palette should show matching clients and matters
     const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('Clients')).toBeVisible()
+    await expect(dialog.getByText('Matters')).toBeVisible()
     await expect(dialog.getByLabel('Clients').getByText(clientName)).toBeVisible({ timeout: 5000 })
     await expect(dialog.getByLabel('Matters').getByText(matterDescription)).toBeVisible()
   })

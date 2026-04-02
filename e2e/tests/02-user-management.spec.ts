@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/console-capture'
 import { uniqueSuffix } from '../helpers/test-data'
 
 test.describe('User Management (admin)', () => {
@@ -85,21 +85,29 @@ test.describe('User Management (admin)', () => {
       response.request().method() === 'PATCH' &&
       /\/api\/users\/[^/]+$/.test(response.url())
     )
+    const usersRefreshPromise = page.waitForResponse((response) =>
+      response.request().method() === 'GET' &&
+      /\/api\/users$/.test(response.url())
+    )
 
     // Submit — the button text is "Update User"
     await page.getByRole('button', { name: /update user/i }).click()
     const updateResponse = await updateResponsePromise
     expect(updateResponse.ok()).toBeTruthy()
+    expect((await usersRefreshPromise).ok()).toBeTruthy()
+    await expect(page.getByText(`Updated ${managedUser.lastName}`)).toBeVisible({ timeout: 10000 })
 
     // Reload and verify
     await page.reload()
-    await expect(page.getByText(`Updated ${managedUser.lastName}`)).toBeVisible({ timeout: 5000 })
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByText(`Updated ${managedUser.lastName}`)).toBeVisible({ timeout: 10000 })
   })
 
   test('deactivate user, verify status changes', async ({ page }) => {
     await page.goto('/settings/users')
     await expect(page.locator('.brand-table')).toBeVisible({ timeout: 10000 })
-    await expect(page.getByText(`Updated ${managedUser.lastName}`)).toBeVisible({ timeout: 5000 })
+    const managedUserRow = page.locator('tr').filter({ hasText: managedUser.email })
+    await expect(managedUserRow).toBeVisible({ timeout: 10000 })
 
     // Click the deactivate button — aria-label is "Deactivate Updated"
     // (aria-label uses firstName only: `Deactivate ${user.firstName}`)
@@ -107,13 +115,22 @@ test.describe('User Management (admin)', () => {
       response.request().method() === 'PATCH' &&
       /\/api\/users\/[^/]+$/.test(response.url())
     )
-    await page.getByLabel('Deactivate Updated').click()
+    const usersRefreshPromise = page.waitForResponse((response) =>
+      response.request().method() === 'GET' &&
+      /\/api\/users$/.test(response.url())
+    )
+    const currentFirstName = (await managedUserRow.locator('td').first().innerText()).split(' ')[0]
+    await page.getByLabel(`Deactivate ${currentFirstName}`).click()
     const deactivateResponse = await deactivateResponsePromise
     expect(deactivateResponse.ok()).toBeTruthy()
+    expect((await usersRefreshPromise).ok()).toBeTruthy()
+    await expect(managedUserRow.getByText('Inactive')).toBeVisible({ timeout: 10000 })
 
-    // Verify the status badge changes to "Inactive" without full reload
-    // The toggleActive handler calls fetchUsers() which re-renders the table
-    const updatedUserRow = page.locator('tr').filter({ hasText: `Updated ${managedUser.lastName}` })
+    // Supabase-backed runs are slower; reload to ensure the updated status has round-tripped.
+    await page.reload()
+    await page.waitForLoadState('networkidle')
+
+    const updatedUserRow = page.locator('tr').filter({ hasText: managedUser.email })
     await expect(updatedUserRow.getByText('Inactive')).toBeVisible({ timeout: 5000 })
   })
 })
@@ -124,6 +141,15 @@ test.describe('User Management (fee earner access denied)', () => {
   test('fee earner cannot access /settings/users', async ({ page }) => {
     await page.goto('/settings/users')
     // Should be redirected or see an access-denied message
+    await expect(page).not.toHaveURL(/\/settings\/users$/)
+  })
+})
+
+test.describe('User Management (assistant access denied)', () => {
+  test.use({ storageState: 'e2e/.auth/assistant.json' })
+
+  test('assistant cannot access /settings/users', async ({ page }) => {
+    await page.goto('/settings/users')
     await expect(page).not.toHaveURL(/\/settings\/users$/)
   })
 })

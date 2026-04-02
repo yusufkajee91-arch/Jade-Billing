@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/console-capture'
 import path from 'path'
 
 const BASE = 'http://localhost:3001'
@@ -81,20 +81,18 @@ test.describe('US-020: Bank Statement Import', () => {
   test('upload via reconciliation page UI', async ({ page }) => {
     await page.goto('/reconciliation')
 
-    // Look for the upload/import button
-    const uploadBtn = page.getByRole('button', { name: /upload|import/i })
-    if (await uploadBtn.isVisible()) {
-      await uploadBtn.click()
+    const uploadBtn = page.getByRole('button', { name: /import statement/i })
+    await expect(uploadBtn).toBeVisible()
+    await uploadBtn.click()
 
-      // The upload form should appear
-      // Look for file input and account type selector
-      const fileInput = page.locator('input[type="file"]')
-      if (await fileInput.isVisible({ timeout: 3000 })) {
-        await fileInput.setInputFiles(FIXTURE_PATH)
-      }
-    }
+    const chooseFile = page.getByText('Choose File', { exact: true })
+    await expect(chooseFile).toBeVisible()
 
-    // Verify the page loads properly regardless
-    await expect(page.locator('body')).toBeVisible()
+    const uploadForm = chooseFile.locator('xpath=ancestor::form[1]')
+    const fileInput = page.locator('input[type="file"]')
+    await fileInput.setInputFiles(FIXTURE_PATH)
+
+    await expect(uploadForm.getByText('fnb-statement.csv', { exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: /^import$/i })).toBeEnabled()
   })
 })

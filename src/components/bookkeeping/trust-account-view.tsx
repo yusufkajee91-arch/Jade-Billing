@@ -7,6 +7,9 @@ import { ArrowRightLeft, PlusCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { Session } from 'next-auth'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('TrustAccountView')
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,6 +69,7 @@ interface Props {
 }
 
 export function TrustAccountView({ session }: Props) {
+  log.info('mount', { role: session.user.role })
   const [activeTab, setActiveTab] = useState<'register' | 'journal'>('register')
   const [register, setRegister] = useState<TrustRegister | null>(null)
   const [entries, setEntries] = useState<TrustEntry[]>([])
@@ -78,20 +82,34 @@ export function TrustAccountView({ session }: Props) {
   const isAdmin = session.user.role === 'admin'
 
   const loadRegister = useCallback(async () => {
+    log.debug('loading trust register')
     setLoadingRegister(true)
     try {
       const res = await fetch('/api/trust-register')
-      if (res.ok) setRegister(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        log.info('trust register loaded', { matterCount: data.matters?.length ?? 0, totalBalanceCents: data.totalBalanceCents })
+        setRegister(data)
+      } else {
+        log.warn('trust register fetch failed', { status: res.status })
+      }
     } finally {
       setLoadingRegister(false)
     }
   }, [])
 
   const loadEntries = useCallback(async () => {
+    log.debug('loading trust entries')
     setLoadingEntries(true)
     try {
       const res = await fetch('/api/trust-entries?limit=100')
-      if (res.ok) setEntries(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        log.info('trust entries loaded', { count: data.length })
+        setEntries(data)
+      } else {
+        log.warn('trust entries fetch failed', { status: res.status })
+      }
     } finally {
       setLoadingEntries(false)
     }
@@ -393,6 +411,7 @@ function InterMatterTransferForm({ onSaved, onCancel }: TransferFormProps) {
     if (!toMatterId) { toast.error('Enter a valid "To" matter code'); return }
     if (fromMatterId === toMatterId) { toast.error('Cannot transfer to the same matter'); return }
 
+    log.info('inter-matter transfer submitting', { fromMatterId, toMatterId, amountCents })
     setSaving(true)
     try {
       const res = await fetch('/api/trust-entries/transfer', {
@@ -409,9 +428,11 @@ function InterMatterTransferForm({ onSaved, onCancel }: TransferFormProps) {
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
+        log.error('inter-matter transfer failed', { status: res.status, error: data.error })
         toast.error(data.error ?? 'Transfer failed')
         return
       }
+      log.info('inter-matter transfer recorded')
       toast.success('Inter-matter transfer recorded')
       onSaved()
     } finally {
@@ -547,6 +568,7 @@ function TrustToBusinessForm({ onSaved, onCancel }: TransferFormProps) {
     if (!amountCents || amountCents <= 0) { toast.error('Enter a valid amount'); return }
     if (!matterId) { toast.error('Enter a valid matter code'); return }
 
+    log.info('trust-to-business transfer submitting', { matterId, amountCents })
     setSaving(true)
     try {
       const res = await fetch('/api/bookkeeping/trust-to-business', {
@@ -562,9 +584,11 @@ function TrustToBusinessForm({ onSaved, onCancel }: TransferFormProps) {
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
+        log.error('trust-to-business transfer failed', { status: res.status, error: data.error })
         toast.error(data.error ?? 'Transfer failed')
         return
       }
+      log.info('trust-to-business transfer recorded')
       toast.success('Trust-to-business transfer recorded')
       onSaved()
     } finally {

@@ -3,6 +3,9 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notFound } from 'next/navigation'
 import { InvoicePreview } from '@/components/invoices/invoice-preview'
+import { pageLogger } from '@/lib/debug'
+
+const log = pageLogger('invoices/[id]')
 
 export default async function InvoiceDetailPage({
   params,
@@ -11,6 +14,7 @@ export default async function InvoiceDetailPage({
 }) {
   const session = await getServerSession(authOptions)
   const { id } = await params
+  log.info('Rendering invoice detail page for:', id)
 
   const invoice = await prisma.invoice.findUnique({
     where: { id },
@@ -21,7 +25,11 @@ export default async function InvoiceDetailPage({
     },
   })
 
-  if (!invoice) notFound()
+  if (!invoice) {
+    log.warn('Invoice not found:', id)
+    notFound()
+  }
+  log.debug('Invoice loaded:', { invoiceNumber: invoice.invoiceNumber, status: invoice.status })
 
   // Non-admin: ensure the user has access to this matter
   if (session?.user?.role !== 'admin') {

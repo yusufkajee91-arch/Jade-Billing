@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/console-capture'
 import { createClient, createMatter, createFeeEntry } from '../helpers/api-factories'
 import { todayISO, uniqueCode, uniqueSuffix } from '../helpers/test-data'
 

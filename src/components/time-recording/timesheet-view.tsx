@@ -6,6 +6,9 @@ import { formatCurrency } from '@/lib/utils'
 import { formatMinutes } from '@/lib/time-parser'
 import { useTimeRecording } from './time-recording-provider'
 import { Clock, ChevronLeft, ChevronRight } from 'lucide-react'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('TimesheetView')
 
 interface FeeEntry {
   id: string
@@ -80,6 +83,7 @@ const GLASS = {
 }
 
 export function TimesheetView({ session }: TimesheetViewProps) {
+  log.info('TimesheetView rendered, session user:', session?.user?.name)
   const { open } = useTimeRecording()
   const [period, setPeriod] = useState<Period>('week')
   const [offset, setOffset] = useState(0) // 0 = current, -1 = previous, etc.
@@ -101,6 +105,7 @@ export function TimesheetView({ session }: TimesheetViewProps) {
   }, [period, offset])
 
   const load = useCallback(async () => {
+    log.info('Loading timesheet entries', { from: toISO(from), to: toISO(to), period })
     setLoading(true)
     try {
       const params = new URLSearchParams({
@@ -108,11 +113,20 @@ export function TimesheetView({ session }: TimesheetViewProps) {
         to: toISO(to),
       })
       const res = await fetch(`/api/fee-entries?${params}`)
-      if (res.ok) setEntries(await res.json())
+      log.debug('Fee entries response status:', res.status)
+      if (res.ok) {
+        const data = await res.json()
+        log.info('Loaded', data.length, 'fee entries')
+        setEntries(data)
+      } else {
+        log.error('Failed to load fee entries:', res.status, res.statusText)
+      }
+    } catch (error) {
+      log.error('Error loading timesheet entries:', error)
     } finally {
       setLoading(false)
     }
-  }, [from, to])
+  }, [from, to, period])
 
   useEffect(() => {
     load()

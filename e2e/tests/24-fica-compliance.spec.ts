@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/console-capture'
 import { createClient } from '../helpers/api-factories'
 
 const BASE = 'http://localhost:3001'

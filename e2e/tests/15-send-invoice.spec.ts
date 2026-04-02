@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/console-capture'
 import {
   createClient,
   createMatter,
@@ -12,11 +12,12 @@ test.describe('US-015: Send Invoice', () => {
   let invoiceId: string
 
   test.beforeAll(async ({ request }) => {
+    const runId = Date.now().toString(36)
     const client = await createClient(request, {
       ...TEST_CLIENT,
-      clientCode: 'SND',
-      clientName: 'Send Test Client (Pty) Ltd',
-      emailGeneral: 'send-test@example.com',
+      clientCode: `SN${runId.slice(-4).toUpperCase()}`,
+      clientName: `Send Test Client ${runId} (Pty) Ltd`,
+      emailGeneral: `send-test-${runId}@example.com`,
     })
 
     const matter = await createMatter(request, {
@@ -45,8 +46,23 @@ test.describe('US-015: Send Invoice', () => {
 
     // Configure SMTP settings so the send button is available
     // Note: real SMTP may not be configured; the test verifies the UI attempt
-    await request.patch(`${BASE}/api/firm-settings`, {
+    const smtpSettingsResponse = await request.put(`${BASE}/api/firm-settings`, {
       data: {
+        firmName: 'Dolata & Co Attorneys',
+        tradingName: 'Dolata & Co',
+        vatRegistered: true,
+        vatRegistrationNumber: '4123456789',
+        trustBankName: 'FNB',
+        trustBankAccountName: 'Dolata Trust Account',
+        trustBankAccountNumber: '1234567890',
+        trustBankBranchCode: '250655',
+        businessBankName: 'FNB',
+        businessBankAccountName: 'Dolata Business Account',
+        businessBankAccountNumber: '9876543210',
+        businessBankBranchCode: '250655',
+        invoicePrefix: 'INV',
+        billingBlocksEnabled: true,
+        financialYearStartMonth: 3,
         smtpHost: 'smtp.test.local',
         smtpPort: 587,
         smtpUser: 'test@dcco.law',
@@ -55,6 +71,7 @@ test.describe('US-015: Send Invoice', () => {
         smtpFromName: 'Dolata & Co Billing',
       },
     })
+    expect(smtpSettingsResponse.ok()).toBeTruthy()
   })
 
   test('invoice detail page has Send button', async ({ page }) => {
@@ -65,7 +82,23 @@ test.describe('US-015: Send Invoice', () => {
     await expect(sendBtn).toBeVisible()
   })
 
-  test('click Send triggers API call and UI responds', async ({ page }) => {
+  test('click Send triggers API call and UI responds', async ({ page, request }) => {
+    const invoiceResponse = await request.get(`${BASE}/api/invoices/${invoiceId}`)
+    expect(invoiceResponse.ok()).toBeTruthy()
+    const invoice = await invoiceResponse.json()
+
+    await page.route(new RegExp(`/api/invoices/${invoiceId}/send$`), async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ...invoice,
+          status: 'sent_invoice',
+          sentAt: new Date().toISOString(),
+        }),
+      })
+    })
+
     await page.goto(`/invoices/${invoiceId}`)
 
     // Click Send Invoice button to open dialog
@@ -93,14 +126,12 @@ test.describe('US-015: Send Invoice', () => {
 
     // The send may fail due to SMTP not being real, but verify the attempt was made
     if (sendResponse) {
-      // Either success (status updated) or error (SMTP failure) is acceptable
+      // The UI flow should attempt the send endpoint.
       const status = sendResponse.status()
-      expect([200, 422, 500]).toContain(status)
+      expect(status).toBe(200)
     }
 
-    // UI should show either success toast or error toast
-    // Wait briefly for the response to process
-    await page.waitForTimeout(1000)
+    await expect(page.getByText(new RegExp(`Invoice sent to ${invoice.clientEmail}`))).toBeVisible({ timeout: 5000 })
   })
 
   test('send API endpoint validates draft status', async ({ request }) => {

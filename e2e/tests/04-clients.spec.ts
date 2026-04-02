@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/console-capture'
 import { createClient } from '../helpers/api-factories'
 import { uniqueCode, uniqueSuffix } from '../helpers/test-data'
 
@@ -108,10 +108,17 @@ test.describe('Clients', () => {
     await nameField.clear()
     await nameField.fill(`${setupClientName} Updated`)
 
+    const updateResponsePromise = page.waitForResponse((response) =>
+      response.request().method() === 'PATCH' &&
+      /\/api\/clients\/[^/]+$/.test(response.url())
+    )
     await page.getByRole('button', { name: /update client/i }).click()
+    const updateResponse = await updateResponsePromise
+    expect(updateResponse.ok()).toBeTruthy()
 
     // Reload and verify
     await page.reload()
+    await page.waitForLoadState('networkidle')
     await expect(page.getByText(`${setupClientName} Updated`)).toBeVisible({ timeout: 5000 })
   })
 })

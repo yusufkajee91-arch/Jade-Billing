@@ -31,6 +31,9 @@ import type { UnsentInvoice } from '@/components/dashboard/widgets/unsent-invoic
 import type { AdminKpis } from '@/components/dashboard/widgets/firm-kpis-widget'
 import type { DiaryItem } from '@/components/dashboard/widgets/tasks-widget'
 import type { CalendarDiaryItem } from '@/components/dashboard/widgets/calendar-widget'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('DashboardShell')
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -339,6 +342,15 @@ function DarkHeaderBar({
 // ─── Main shell ───────────────────────────────────────────────────────────────
 
 export function DashboardShell({ data }: { data: DashboardData }) {
+  log.info('mount', {
+    userId: data.userId,
+    isAdmin: data.isAdmin,
+    wipCount: data.wip.length,
+    wipTotal: data.wipTotal,
+    todayDiaryItems: data.todayDiaryItems.length,
+    unsentInvoices: data.unsentInvoices.length,
+    calendarItems: data.calendarItems.length,
+  })
   const storageKey = `dashboard-prefs-v1-${data.userId}`
 
   const [prefs, setPrefs] = useState<WidgetPrefs>({

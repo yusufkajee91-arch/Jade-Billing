@@ -3,7 +3,10 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { matchFeeEarner } from '@/lib/import-utils'
+import { apiLogger } from '@/lib/debug'
 import * as XLSX from 'xlsx'
+
+const log = apiLogger('import/invoices')
 
 function str(val: unknown): string | null {
   if (val === null || val === undefined || val === '') return null
@@ -61,10 +64,15 @@ interface RawRow {
 }
 
 export async function POST(request: NextRequest) {
+  log.info('POST request received')
   try {
     const session = await getServerSession(authOptions)
-    if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+    if (!session) {
+      log.warn('Unauthorized request — no session')
+      return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+    }
     if (session.user.role !== 'admin') {
+      log.warn('Forbidden — user role is not admin', { role: session.user.role })
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -72,11 +80,13 @@ export async function POST(request: NextRequest) {
     try {
       formData = await request.formData()
     } catch {
+      log.warn('Invalid request — expected multipart/form-data')
       return NextResponse.json({ error: 'Expected multipart/form-data' }, { status: 400 })
     }
 
     const file = formData.get('file')
     if (!file || typeof file === 'string') {
+      log.warn('Missing or invalid file field')
       return NextResponse.json({ error: 'file is required' }, { status: 400 })
     }
 
@@ -84,11 +94,14 @@ export async function POST(request: NextRequest) {
     const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
     const sheetName = workbook.SheetNames[0]
     if (!sheetName) {
+      log.warn('No sheets found in uploaded file')
       return NextResponse.json({ error: 'No sheets found in file' }, { status: 422 })
     }
     const rows = XLSX.utils.sheet_to_json<RawRow>(workbook.Sheets[sheetName]!)
+    log.debug('File parsed:', { sheetName, rowCount: rows.length })
 
     if (rows.length === 0) {
+      log.warn('No data rows found in file')
       return NextResponse.json({ error: 'No data rows found' }, { status: 422 })
     }
 
@@ -100,6 +113,7 @@ export async function POST(request: NextRequest) {
       if (!invoiceGroups.has(ref)) invoiceGroups.set(ref, [])
       invoiceGroups.get(ref)!.push(row)
     }
+    log.debug('Invoice groups formed:', { groupCount: invoiceGroups.size })
 
     // ── Load lookup data ──────────────────────────────────────────────────────
     const matters = await prisma.matter.findMany({
@@ -125,6 +139,7 @@ export async function POST(request: NextRequest) {
           .filter(Boolean)
           .join(', ')
       : null
+    log.debug('Lookup data loaded:', { matters: matters.length, users: users.length, existingInvoices: existingInvoices.length })
 
     // ── Process each invoice group ────────────────────────────────────────────
     let invoicesImported = 0
@@ -259,6 +274,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    log.info('POST completed successfully', { invoicesImported, lineItemsImported, skippedDuplicate, skippedNoMatter: skippedNoMatter.length, errorCount: errors.length })
     return NextResponse.json({
       invoices_imported: invoicesImported,
       line_items_imported: lineItemsImported,
@@ -266,9 +282,11 @@ export async function POST(request: NextRequest) {
       skipped_duplicate: skippedDuplicate,
       errors,
     })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error('[import/invoices] unhandled error:', msg)
-    return NextResponse.json({ error: msg }, { status: 500 })
+  } catch (error) {
+    log.error('POST failed:', error)
+    return NextResponse.json(
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined } : undefined },
+      { status: 500 }
+    )
   }
 }

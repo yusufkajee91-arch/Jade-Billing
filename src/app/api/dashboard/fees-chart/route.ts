@@ -2,16 +2,24 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { apiLogger } from '@/lib/debug'
+
+const log = apiLogger('dashboard/fees-chart')
 
 // GET /api/dashboard/fees-chart?scope=mine|all
 // Returns daily cumulative fee data for current month + previous month.
 export async function GET(request: NextRequest) {
+  log.info('GET request received')
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  if (!session) {
+    log.warn('GET rejected: unauthorised')
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  }
 
   const { searchParams } = new URL(request.url)
   const scope = searchParams.get('scope') ?? 'mine'
   const isAdmin = session.user.role === 'admin'
+  log.debug('Query params:', { scope, isAdmin })
 
   const now = new Date()
   const year = now.getFullYear()
@@ -97,6 +105,8 @@ export async function GET(request: NextRequest) {
       data.push(point)
     }
 
+    log.debug('Fees chart data:', { dataPoints: data.length, monthlyTargetCents })
+    log.info('GET completed successfully')
     return NextResponse.json({
       data,
       today,
@@ -106,9 +116,9 @@ export async function GET(request: NextRequest) {
       previousMonthName: prevStart.toLocaleString('en-ZA', { month: 'long', timeZone: 'UTC' }),
     })
   } catch (err) {
-    console.error('[GET /api/dashboard/fees-chart]', err)
+    log.error('GET failed:', err)
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined } : undefined },
       { status: 500 },
     )
   }

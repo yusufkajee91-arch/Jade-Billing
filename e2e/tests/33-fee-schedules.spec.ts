@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/console-capture'
 
 test.describe('US-033: Fee Schedules', () => {
   test('fee schedules page loads at /fee-schedules', async ({ page }) => {

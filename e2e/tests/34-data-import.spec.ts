@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/console-capture'
 
 test.describe('US-034: Data Import', () => {
   test('import page loads at /settings/import-data', async ({ page }) => {

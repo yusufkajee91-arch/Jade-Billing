@@ -19,6 +19,9 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
 import { ENTITY_TYPE_LABELS } from '@/lib/entity-types'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('ClientForm')
 
 const clientSchema = z.object({
   clientCode: z.string().max(10).optional(),
@@ -90,6 +93,7 @@ function autoGenerateCode(name: string): string {
 }
 
 export function ClientForm({ client, onClose, onSaved }: ClientFormProps) {
+  log.info('mount', { isEdit: Boolean(client), clientId: client?.id })
   const isEdit = Boolean(client)
   const [sameAsPhysical, setSameAsPhysical] = useState(false)
 
@@ -126,6 +130,7 @@ export function ClientForm({ client, onClose, onSaved }: ClientFormProps) {
   }
 
   const onSubmit = async (data: ClientFormData) => {
+    log.info('submitting', { isEdit, clientName: data.clientName, entityType: data.entityType })
     try {
       // Auto-generate clientCode if blank
       let clientCode = data.clientCode?.trim().toUpperCase()
@@ -154,14 +159,17 @@ export function ClientForm({ client, onClose, onSaved }: ClientFormProps) {
 
       if (!res.ok) {
         const err = await res.json()
+        log.error('client save failed', { status: res.status, error: err.error })
         if (res.status === 409) throw new Error('A client with this code already exists')
         throw new Error(err.error || 'Failed to save client')
       }
 
+      log.info('client saved successfully')
       toast.success(isEdit ? 'Client updated successfully' : 'Client created successfully')
       onSaved()
       onClose()
     } catch (err) {
+      log.error('client submission error', err)
       toast.error(err instanceof Error ? err.message : 'Failed to save client')
     }
   }

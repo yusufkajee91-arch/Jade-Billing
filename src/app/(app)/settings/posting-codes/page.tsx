@@ -12,7 +12,10 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { SettingsNav } from '@/components/layout/settings-nav'
+import { componentLogger } from '@/lib/debug'
 import React from 'react'
+
+const log = componentLogger('PostingCodesPage')
 
 interface PostingCode {
   id: string
@@ -149,6 +152,7 @@ function PostingCodeForm({
 }
 
 export default function PostingCodesPage() {
+  log.info('render')
   const { data: session, status } = useSession()
   const router = useRouter()
   const [postingCodes, setPostingCodes] = useState<PostingCode[]>([])
@@ -163,10 +167,17 @@ export default function PostingCodesPage() {
   }, [status, session, router])
 
   const load = useCallback(async () => {
+    log.info('fetching posting codes')
     setLoading(true)
     try {
       const res = await fetch('/api/posting-codes')
-      if (res.ok) setPostingCodes(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        log.info('posting codes loaded', { count: data.length })
+        setPostingCodes(data)
+      } else {
+        log.error('failed to fetch posting codes', { status: res.status })
+      }
     } finally {
       setLoading(false)
     }

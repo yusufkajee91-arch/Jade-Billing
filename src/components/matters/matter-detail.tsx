@@ -38,6 +38,9 @@ import { TrustLedger } from '@/components/bookkeeping/trust-ledger'
 import { BusinessLedger } from '@/components/bookkeeping/business-ledger'
 import { formatCurrency } from '@/lib/utils'
 import { formatMinutes } from '@/lib/time-parser'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('MatterDetail')
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -197,13 +200,17 @@ function FeeEntriesTab({
   const router = useRouter()
 
   const load = useCallback(async () => {
+    log.debug('loading fee entries', { matterId, subTab })
     setLoading(true)
     try {
       const res = await fetch(`/api/matters/${matterId}/fee-entries?tab=${subTab}`)
       if (res.ok) {
         const data = await res.json()
+        log.info('fee entries loaded', { matterId, count: data.entries?.length ?? 0, feesCents: data.summary?.feesCents, disbCents: data.summary?.disbCents })
         setEntries(data.entries ?? [])
         setSummary(data.summary ?? { feesCents: 0, disbCents: 0 })
+      } else {
+        log.warn('fee entries fetch failed', { status: res.status })
       }
     } finally {
       setLoading(false)
@@ -232,8 +239,10 @@ function FeeEntriesTab({
   }
 
   const deleteEntry = async (id: string) => {
+    log.info('deleting fee entry', { id })
     const res = await fetch(`/api/fee-entries/${id}`, { method: 'DELETE' })
     if (res.ok) {
+      log.info('fee entry deleted', { id })
       toast.success('Entry deleted')
       setDeleteConfirmId(null)
       setSelected((prev) => { const n = new Set(prev); n.delete(id); return n })
@@ -241,6 +250,7 @@ function FeeEntriesTab({
       onEntryChanged()
     } else {
       const err = await res.json().catch(() => ({}))
+      log.error('fee entry delete failed', { id, error: err.error })
       toast.error(err.error || 'Failed to delete entry')
     }
   }
@@ -673,6 +683,7 @@ function MatterInterTransferForm({
     if (!amountCents || amountCents <= 0) { toast.error('Enter a valid amount'); return }
     if (!toMatterId) { toast.error('Enter a valid destination matter code'); return }
 
+    log.info('matter trust transfer submitting', { fromMatterId, toMatterId, amountCents })
     setSaving(true)
     try {
       const res = await fetch('/api/trust-entries/transfer', {
@@ -689,9 +700,11 @@ function MatterInterTransferForm({
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
+        log.error('matter trust transfer failed', { status: res.status, error: d.error })
         toast.error(d.error ?? 'Transfer failed')
         return
       }
+      log.info('matter trust transfer completed')
       toast.success('Trust funds transferred')
       onSaved()
     } finally {
@@ -784,6 +797,7 @@ function MatterTrustToBusinessForm({
     const amountCents = Math.round(parseFloat(amount) * 100)
     if (!amountCents || amountCents <= 0) { toast.error('Enter a valid amount'); return }
 
+    log.info('matter trust-to-business submitting', { matterId, amountCents })
     setSaving(true)
     try {
       const res = await fetch('/api/bookkeeping/trust-to-business', {
@@ -799,9 +813,11 @@ function MatterTrustToBusinessForm({
       })
       if (!res.ok) {
         const d = await res.json().catch(() => ({}))
+        log.error('matter trust-to-business failed', { status: res.status, error: d.error })
         toast.error(d.error ?? 'Transfer failed')
         return
       }
+      log.info('matter trust-to-business completed')
       toast.success('Transferred to business account')
       onSaved()
     } finally {
@@ -1241,6 +1257,7 @@ interface MatterDetailProps {
 }
 
 export function MatterDetail({ matter: initialMatter, session }: MatterDetailProps) {
+  log.info('mount', { matterId: initialMatter.id, matterCode: initialMatter.matterCode, status: initialMatter.status })
   const router = useRouter()
   const [matter, setMatter] = useState(initialMatter)
   const [activeTab, setActiveTab] = useState('fees')
@@ -1257,13 +1274,18 @@ export function MatterDetail({ matter: initialMatter, session }: MatterDetailPro
   const canEdit = isAdmin || isOwner
 
   const refreshMatter = useCallback(async () => {
+    log.debug('refreshing matter data', { matterId: matter.id })
     const res = await fetch(`/api/matters/${matter.id}`)
     if (res.ok) {
+      log.info('matter data refreshed')
       setMatter(await res.json())
+    } else {
+      log.warn('matter refresh failed', { status: res.status })
     }
   }, [matter.id])
 
   const closeMatter = async () => {
+    log.info('closing matter', { matterId: matter.id })
     setClosing(true)
     try {
       const res = await fetch(`/api/matters/${matter.id}`, {
@@ -1272,10 +1294,12 @@ export function MatterDetail({ matter: initialMatter, session }: MatterDetailPro
         body: JSON.stringify({ status: 'closed' }),
       })
       if (!res.ok) throw new Error()
+      log.info('matter closed')
       toast.success('Matter closed')
       setCloseDialogOpen(false)
       refreshMatter()
     } catch {
+      log.error('failed to close matter', { matterId: matter.id })
       toast.error('Failed to close matter')
     } finally {
       setClosing(false)
@@ -1284,6 +1308,7 @@ export function MatterDetail({ matter: initialMatter, session }: MatterDetailPro
 
   const addNote = async () => {
     if (!noteContent.trim()) return
+    log.info('adding note', { matterId: matter.id })
     setAddingNote(true)
     try {
       const res = await fetch(`/api/matters/${matter.id}/notes`, {
@@ -1292,10 +1317,12 @@ export function MatterDetail({ matter: initialMatter, session }: MatterDetailPro
         body: JSON.stringify({ content: noteContent }),
       })
       if (!res.ok) throw new Error()
+      log.info('note added')
       toast.success('Note added')
       setNoteContent('')
       refreshMatter()
     } catch {
+      log.error('failed to add note', { matterId: matter.id })
       toast.error('Failed to add note')
     } finally {
       setAddingNote(false)
@@ -1303,6 +1330,7 @@ export function MatterDetail({ matter: initialMatter, session }: MatterDetailPro
   }
 
   const handleFileUpload = async (file: File) => {
+    log.info('uploading attachment', { matterId: matter.id, fileName: file.name, fileSize: file.size })
     setUploading(true)
     try {
       const formData = new FormData()
@@ -1312,9 +1340,11 @@ export function MatterDetail({ matter: initialMatter, session }: MatterDetailPro
         body: formData,
       })
       if (!res.ok) throw new Error()
+      log.info('attachment uploaded')
       toast.success('Attachment uploaded')
       refreshMatter()
     } catch {
+      log.error('attachment upload failed', { matterId: matter.id })
       toast.error('Failed to upload attachment')
     } finally {
       setUploading(false)
@@ -1448,7 +1478,7 @@ export function MatterDetail({ matter: initialMatter, session }: MatterDetailPro
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => { log.debug('tab changed', { tab: tab.id }); setActiveTab(tab.id) }}
                   style={{
                     fontFamily: 'var(--font-noto-sans)',
                     fontSize: 11,

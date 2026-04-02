@@ -1,8 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
-import path from 'path'
 import dotenv from 'dotenv'
 
-dotenv.config({ path: '.env.test' })
+const envFile = process.env.E2E_ENV_FILE ?? '.env.test'
+dotenv.config({ path: envFile })
 
 export default defineConfig({
   testDir: './e2e/tests',
@@ -15,7 +15,7 @@ export default defineConfig({
   expect: { timeout: 5_000 },
 
   use: {
-    baseURL: 'http://localhost:3001',
+    baseURL: process.env.NEXTAUTH_URL || 'http://localhost:3001',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -34,7 +34,7 @@ export default defineConfig({
   ],
 
   webServer: {
-    command: 'npx dotenv -e .env.test -- npx next dev --port 3001',
+    command: `npx dotenv -e ${envFile} -- npx next dev --port 3001`,
     url: 'http://localhost:3001',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

@@ -1,4 +1,7 @@
 import { prisma } from '@/lib/prisma'
+import { libLogger } from '@/lib/debug'
+
+const log = libLogger('matter-code')
 
 /**
  * Atomically generate the next matter code for a given fee earner + client
@@ -12,6 +15,7 @@ export async function generateMatterCode(
   feeEarnerInitials: string,
   clientCode: string,
 ): Promise<string> {
+  log.info('Generating matter code for', feeEarnerInitials, '/', clientCode)
   // Atomic upsert: insert seq=1 on first call, increment on subsequent calls.
   // The UPDATE SET is atomic in PostgreSQL — no separate transaction needed.
   const result = await prisma.$queryRaw<Array<{ last_sequence: number }>>`
@@ -23,5 +27,7 @@ export async function generateMatterCode(
   `
   const seq = result[0].last_sequence
   const paddedSeq = String(seq).padStart(3, '0')
-  return `${feeEarnerInitials}/${clientCode}-${paddedSeq}`
+  const code = `${feeEarnerInitials}/${clientCode}-${paddedSeq}`
+  log.info('Generated matter code:', code)
+  return code
 }

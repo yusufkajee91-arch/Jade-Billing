@@ -1,4 +1,7 @@
 import nodemailer from 'nodemailer'
+import { libLogger } from '@/lib/debug'
+
+const log = libLogger('email')
 
 interface SmtpConfig {
   host: string
@@ -30,6 +33,8 @@ export async function sendInvoiceEmail({
   isProForma,
   pdfBuffer,
 }: SendInvoiceEmailArgs): Promise<void> {
+  log.info('Sending invoice email', { to, invoiceNumber, matterCode, isProForma })
+  log.debug('SMTP config:', { host: smtp.host, port: smtp.port, user: smtp.user, fromEmail: smtp.fromEmail })
   const transporter = nodemailer.createTransport({
     host: smtp.host,
     port: smtp.port,
@@ -57,17 +62,23 @@ export async function sendInvoiceEmail({
     <p>Kind regards,<br/>${smtp.fromName}</p>
   `
 
-  await transporter.sendMail({
-    from: `"${smtp.fromName}" <${smtp.fromEmail}>`,
-    to,
-    subject,
-    html,
-    attachments: [
-      {
-        filename,
-        content: pdfBuffer,
-        contentType: 'application/pdf',
-      },
-    ],
-  })
+  try {
+    await transporter.sendMail({
+      from: `"${smtp.fromName}" <${smtp.fromEmail}>`,
+      to,
+      subject,
+      html,
+      attachments: [
+        {
+          filename,
+          content: pdfBuffer,
+          contentType: 'application/pdf',
+        },
+      ],
+    })
+    log.info('Invoice email sent successfully to:', to)
+  } catch (error) {
+    log.error('Failed to send invoice email:', error)
+    throw error
+  }
 }

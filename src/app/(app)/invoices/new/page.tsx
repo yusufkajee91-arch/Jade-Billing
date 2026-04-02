@@ -3,6 +3,9 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { notFound } from 'next/navigation'
 import { InvoiceCreateForm } from '@/components/invoices/invoice-create-form'
+import { pageLogger } from '@/lib/debug'
+
+const log = pageLogger('invoices/new')
 
 export default async function NewInvoicePage({
   searchParams,
@@ -11,8 +14,12 @@ export default async function NewInvoicePage({
 }) {
   const session = await getServerSession(authOptions)
   const { matterId, entries } = await searchParams
+  log.info('Rendering new invoice page, matterId:', matterId)
 
-  if (!matterId) notFound()
+  if (!matterId) {
+    log.warn('No matterId provided')
+    notFound()
+  }
 
   const entryIds = entries ? entries.split(',').filter(Boolean) : []
 
@@ -26,7 +33,11 @@ export default async function NewInvoicePage({
       client: { select: { clientName: true } },
     },
   })
-  if (!matter) notFound()
+  if (!matter) {
+    log.warn('Matter not found for new invoice:', matterId)
+    notFound()
+  }
+  log.debug('Matter loaded for invoice:', { matterCode: matter.matterCode, client: matter.client.clientName })
 
   // Non-admin: check access
   if (session?.user?.role !== 'admin') {

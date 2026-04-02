@@ -12,7 +12,10 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { SettingsNav } from '@/components/layout/settings-nav'
+import { componentLogger } from '@/lib/debug'
 import React from 'react'
+
+const log = componentLogger('FeeLevelsPage')
 
 interface FeeLevel {
   id: string
@@ -151,6 +154,7 @@ function FeeLevelForm({
 }
 
 export default function FeeLevelsPage() {
+  log.info('render')
   const { data: session, status } = useSession()
   const router = useRouter()
   const [feeLevels, setFeeLevels] = useState<FeeLevel[]>([])
@@ -165,10 +169,17 @@ export default function FeeLevelsPage() {
   }, [status, session, router])
 
   const load = useCallback(async () => {
+    log.info('fetching fee levels')
     setLoading(true)
     try {
       const res = await fetch('/api/fee-levels')
-      if (res.ok) setFeeLevels(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        log.info('fee levels loaded', { count: data.length })
+        setFeeLevels(data)
+      } else {
+        log.error('failed to fetch fee levels', { status: res.status })
+      }
     } finally {
       setLoading(false)
     }

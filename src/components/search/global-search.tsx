@@ -3,6 +3,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search } from 'lucide-react'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('GlobalSearch')
 
 interface MatterResult {
   id: string
@@ -15,6 +18,7 @@ interface MatterResult {
 }
 
 export function GlobalSearch() {
+  log.debug('render')
   const router = useRouter()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<MatterResult[]>([])
@@ -32,17 +36,22 @@ export function GlobalSearch() {
       setOpen(false)
       return
     }
+    log.debug('searching', { query: q })
     setLoading(true)
     try {
       const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`)
-      if (!res.ok) return
+      if (!res.ok) {
+        log.warn('search failed', { status: res.status })
+        return
+      }
       const data = await res.json()
       const matters: MatterResult[] = data.matters ?? []
+      log.info('search results', { query: q, resultCount: matters.length })
       setResults(matters.slice(0, 8))
       setOpen(matters.length > 0)
       setActiveIndex(-1)
     } catch {
-      // ignore
+      log.warn('search request failed', { query: q })
     } finally {
       setLoading(false)
     }

@@ -7,6 +7,9 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { ArrowUpRight, Check, Clock, X } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('PracticeOverview')
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -210,6 +213,7 @@ function LoeFicaCell({ value, matterId }: { value: boolean; matterId: string }) 
 // ─── Main PracticeOverview ────────────────────────────────────────────────────
 
 export function PracticeOverview() {
+  log.info('render')
   const { data: session, status: authStatus } = useSession()
   const router = useRouter()
   const [matters, setMatters] = useState<PracticeMatter[]>([])
@@ -224,12 +228,19 @@ export function PracticeOverview() {
 
   const load = useCallback(async () => {
     if (authStatus !== 'authenticated') return
+    log.info('loading practice matters', { filterStatus })
     setLoading(true)
     const p = new URLSearchParams()
     if (filterStatus !== 'all') p.set('status', filterStatus)
     // For non-admins, filter to owned/accessed matters
     const res = await fetch(`/api/matters?${p}&limit=500`)
-    if (res.ok) setMatters(await res.json())
+    if (res.ok) {
+      const data = await res.json()
+      log.info('practice matters loaded', { count: data.length })
+      setMatters(data)
+    } else {
+      log.error('failed to load practice matters', { status: res.status })
+    }
     setLoading(false)
   }, [authStatus, filterStatus])
 

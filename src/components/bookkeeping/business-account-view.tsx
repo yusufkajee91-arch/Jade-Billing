@@ -6,6 +6,9 @@ import { PlusCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { Session } from 'next-auth'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('BusinessAccountView')
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,6 +86,7 @@ interface Props {
 }
 
 export function BusinessAccountView({ session }: Props) {
+  log.info('mount', { role: session.user.role })
   const [activeTab, setActiveTab] = useState<'journal' | 'trial-balance'>('journal')
   const [entries, setEntries] = useState<BusinessEntry[]>([])
   const [trialBalance, setTrialBalance] = useState<TrialBalance | null>(null)
@@ -92,20 +96,34 @@ export function BusinessAccountView({ session }: Props) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
 
   const loadEntries = useCallback(async () => {
+    log.debug('loading business entries')
     setLoadingEntries(true)
     try {
       const res = await fetch('/api/business-entries?limit=100')
-      if (res.ok) setEntries(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        log.info('business entries loaded', { count: data.length })
+        setEntries(data)
+      } else {
+        log.warn('business entries fetch failed', { status: res.status })
+      }
     } finally {
       setLoadingEntries(false)
     }
   }, [])
 
   const loadTrialBalance = useCallback(async () => {
+    log.debug('loading trial balance')
     setLoadingTb(true)
     try {
       const res = await fetch('/api/gl/trial-balance')
-      if (res.ok) setTrialBalance(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        log.info('trial balance loaded', { rowCount: data.rows?.length ?? 0 })
+        setTrialBalance(data)
+      } else {
+        log.warn('trial balance fetch failed', { status: res.status })
+      }
     } finally {
       setLoadingTb(false)
     }
@@ -434,6 +452,7 @@ function FirmBusinessEntryForm({ suppliers, onSaved, onCancel }: FirmFormProps) 
       return
     }
 
+    log.info('creating business entry', { entryType, amountCents })
     setSaving(true)
     try {
       const res = await fetch('/api/business-entries', {
@@ -451,9 +470,11 @@ function FirmBusinessEntryForm({ suppliers, onSaved, onCancel }: FirmFormProps) 
       })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
+        log.error('business entry creation failed', { status: res.status, error: data.error })
         toast.error(data.error ?? 'Failed to save entry')
         return
       }
+      log.info('business entry recorded')
       toast.success('Business entry recorded')
       onSaved()
     } finally {

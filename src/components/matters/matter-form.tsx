@@ -18,6 +18,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('MatterForm')
 
 const matterSchema = z.object({
   clientId: z.string().min(1, 'Client is required'),
@@ -68,6 +71,7 @@ interface MatterFormProps {
 }
 
 export function MatterForm({ matter, initialClientId, onClose, onSaved }: MatterFormProps) {
+  log.info('mount', { isEdit: Boolean(matter), matterId: matter?.id, initialClientId })
   const { data: session } = useSession()
   const isEdit = Boolean(matter)
 
@@ -104,6 +108,7 @@ export function MatterForm({ matter, initialClientId, onClose, onSaved }: Matter
 
   useEffect(() => {
     const fetchLookups = async () => {
+      log.debug('fetching lookups')
       const [clientsRes, feRes, mtRes, deptRes, usersRes] = await Promise.all([
         fetch('/api/lookup?type=clients'),
         fetch('/api/lookup?type=fee-earners'),
@@ -116,6 +121,7 @@ export function MatterForm({ matter, initialClientId, onClose, onSaved }: Matter
       if (mtRes.ok) setMatterTypes(await mtRes.json())
       if (deptRes.ok) setDepartments(await deptRes.json())
       if (usersRes.ok) setAllUsers(await usersRes.json())
+      log.info('lookups loaded')
     }
     fetchLookups()
   }, [])
@@ -151,6 +157,7 @@ export function MatterForm({ matter, initialClientId, onClose, onSaved }: Matter
   })
 
   const onSubmit = async (data: MatterFormData) => {
+    log.info('submitting', { isEdit, clientId: data.clientId, ownerId: data.ownerId })
     try {
       const payload = {
         ...data,
@@ -171,13 +178,16 @@ export function MatterForm({ matter, initialClientId, onClose, onSaved }: Matter
 
       if (!res.ok) {
         const err = await res.json()
+        log.error('save failed', { status: res.status, error: err.error })
         throw new Error(err.error || 'Failed to save matter')
       }
 
       const saved = await res.json()
+      log.info('saved successfully', { id: saved.id })
       toast.success(isEdit ? 'Matter updated' : 'Matter created')
       onSaved(saved.id)
     } catch (err) {
+      log.error('submission error', err)
       toast.error(err instanceof Error ? err.message : 'Failed to save matter')
     }
   }

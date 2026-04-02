@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/console-capture'
 import { createClient, createMatter } from '../helpers/api-factories'
 
 test.describe('Record Time Global (FAB + keyboard shortcut)', () => {

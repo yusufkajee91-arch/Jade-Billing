@@ -11,6 +11,8 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:supabase": "E2E_ENV_FILE=.env.e2e.supabase E2E_DB_STRATEGY=reset-existing playwright test",
+    "test:e2e:supabase:headed": "E2E_ENV_FILE=.env.e2e.supabase E2E_DB_STRATEGY=reset-existing playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug"

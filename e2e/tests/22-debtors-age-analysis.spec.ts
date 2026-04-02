@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/console-capture'
 import {
   createClient,
   createMatter,
@@ -13,6 +13,7 @@ test.describe('US-022: Debtors Age Analysis', () => {
   let matterId: string
 
   test.beforeAll(async ({ request }) => {
+    test.setTimeout(60_000)
     const client = await createClient(request, {
       clientName: 'Debtors Test Client (Pty) Ltd',
       clientCode: 'DBT',

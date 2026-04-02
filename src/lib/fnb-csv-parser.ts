@@ -77,6 +77,9 @@ function parseAmountCents(raw: string): number {
 // ─── Main export ──────────────────────────────────────────────────────────────
 
 export function parseFnbCsv(csvContent: string): ParsedBankStatement {
+  // Debug logging is intentionally inline here to avoid importing from debug.ts
+  // (this file may be used in contexts where the debug module isn't available)
+  console.log('[LIB:fnb-csv-parser] Parsing FNB CSV, content length:', csvContent.length)
   const rawLines = csvContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n')
 
   let accountNumber: string | null = null
@@ -147,6 +150,16 @@ export function parseFnbCsv(csvContent: string): ParsedBankStatement {
   const closingBalanceCents = lines.length > 0
     ? lines[lines.length - 1].balanceCents
     : 0
+
+  console.log('[LIB:fnb-csv-parser] Parsed result:', {
+    accountNumber,
+    accountDescription,
+    lineCount: lines.length,
+    dateRange: statementFrom && statementTo
+      ? `${statementFrom.toISOString().slice(0, 10)} to ${statementTo.toISOString().slice(0, 10)}`
+      : 'none',
+    closingBalanceCents,
+  })
 
   return {
     accountNumber,

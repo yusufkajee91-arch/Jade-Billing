@@ -4,6 +4,9 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import type { InvoiceStatus } from '@/generated/prisma'
+import { apiLogger } from '@/lib/debug'
+
+const log = apiLogger('invoices/[id]')
 
 // Valid state transitions
 const TRANSITIONS: Record<InvoiceStatus, InvoiceStatus[]> = {
@@ -60,62 +63,103 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  log.info('GET request received')
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  if (!session) {
+    log.warn('GET unauthorized - no session')
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  }
 
   const { id } = await params
-  const invoice = await prisma.invoice.findUnique({ where: { id }, select: invoiceFullSelect })
-  if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
-  return NextResponse.json(invoice)
+  log.debug('GET invoice id:', id)
+
+  try {
+    const invoice = await prisma.invoice.findUnique({ where: { id }, select: invoiceFullSelect })
+    if (!invoice) {
+      log.warn('GET invoice not found', { id })
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
+    }
+    log.info('GET completed successfully', { invoiceNumber: invoice.invoiceNumber })
+    return NextResponse.json(invoice)
+  } catch (error) {
+    log.error('GET failed:', error)
+    return NextResponse.json(
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined } : undefined },
+      { status: 500 },
+    )
+  }
 }
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  log.info('PATCH request received')
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  if (!session) {
+    log.warn('PATCH unauthorized - no session')
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  }
 
   const { id } = await params
-  const invoice = await prisma.invoice.findUnique({ where: { id }, select: { status: true, invoiceType: true } })
-  if (!invoice) return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
+  log.debug('PATCH invoice id:', id)
 
-  const body = await request.json()
-  const parsed = patchSchema.safeParse(body)
-  if (!parsed.success) {
-    return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 })
+  try {
+    const invoice = await prisma.invoice.findUnique({ where: { id }, select: { status: true, invoiceType: true } })
+    if (!invoice) {
+      log.warn('PATCH invoice not found', { id })
+      return NextResponse.json({ error: 'Invoice not found' }, { status: 404 })
+    }
+
+    const body = await request.json()
+    log.debug('PATCH body:', body)
+    const parsed = patchSchema.safeParse(body)
+    if (!parsed.success) {
+      log.warn('PATCH validation failed:', parsed.error.flatten())
+      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 })
+    }
+
+    const currentStatus = invoice.status as InvoiceStatus
+    let newStatus: InvoiceStatus
+    const updateData: Record<string, unknown> = {}
+
+    if (parsed.data.action === 'mark_paid') {
+      if (currentStatus !== 'sent_invoice') {
+        log.warn('PATCH invalid transition - mark_paid on non-sent invoice', { currentStatus })
+        return NextResponse.json({ error: 'Only sent invoices can be marked paid' }, { status: 409 })
+      }
+      newStatus = 'paid'
+      updateData.paidAt = new Date()
+      updateData.paidNote = parsed.data.paidNote ?? null
+    } else {
+      newStatus = parsed.data.status as InvoiceStatus
+      if (!TRANSITIONS[currentStatus].includes(newStatus)) {
+        log.warn('PATCH invalid status transition', { currentStatus, newStatus })
+        return NextResponse.json(
+          { error: `Cannot transition from ${currentStatus} to ${newStatus}` },
+          { status: 409 },
+        )
+      }
+      if (newStatus === 'sent_pro_forma' || newStatus === 'sent_invoice') {
+        updateData.sentAt = new Date()
+      }
+    }
+
+    updateData.status = newStatus
+    log.debug('PATCH updating invoice:', { currentStatus, newStatus })
+    const updated = await prisma.invoice.update({
+      where: { id },
+      data: updateData,
+      select: invoiceFullSelect,
+    })
+
+    log.info('PATCH completed successfully', { invoiceNumber: updated.invoiceNumber, newStatus })
+    return NextResponse.json(updated)
+  } catch (error) {
+    log.error('PATCH failed:', error)
+    return NextResponse.json(
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined } : undefined },
+      { status: 500 },
+    )
   }
-
-  const currentStatus = invoice.status as InvoiceStatus
-  let newStatus: InvoiceStatus
-  const updateData: Record<string, unknown> = {}
-
-  if (parsed.data.action === 'mark_paid') {
-    if (currentStatus !== 'sent_invoice') {
-      return NextResponse.json({ error: 'Only sent invoices can be marked paid' }, { status: 409 })
-    }
-    newStatus = 'paid'
-    updateData.paidAt = new Date()
-    updateData.paidNote = parsed.data.paidNote ?? null
-  } else {
-    newStatus = parsed.data.status as InvoiceStatus
-    if (!TRANSITIONS[currentStatus].includes(newStatus)) {
-      return NextResponse.json(
-        { error: `Cannot transition from ${currentStatus} to ${newStatus}` },
-        { status: 409 },
-      )
-    }
-    if (newStatus === 'sent_pro_forma' || newStatus === 'sent_invoice') {
-      updateData.sentAt = new Date()
-    }
-  }
-
-  updateData.status = newStatus
-  const updated = await prisma.invoice.update({
-    where: { id },
-    data: updateData,
-    select: invoiceFullSelect,
-  })
-
-  return NextResponse.json(updated)
 }

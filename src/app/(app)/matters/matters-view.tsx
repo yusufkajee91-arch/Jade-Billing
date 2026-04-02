@@ -20,6 +20,9 @@ import {
 } from '@/components/ui/select'
 import { MatterStatusBadge } from '@/components/ui/matter-status-badge'
 import { MatterForm } from '@/components/matters/matter-form'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('MattersView')
 
 interface MatterListItem {
   id: string
@@ -72,6 +75,7 @@ function loadWidths(): Record<string, number> {
 }
 
 export function MattersView() {
+  log.info('render')
   const router = useRouter()
   const [matters, setMatters] = useState<MatterListItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -85,13 +89,17 @@ export function MattersView() {
   const resizingRef = useRef<{ col: string; startX: number; startW: number } | null>(null)
 
   const fetchMatters = useCallback(async () => {
+    log.info('fetching matters', { statusFilter })
     try {
       const params = new URLSearchParams()
       if (statusFilter !== 'all') params.set('status', statusFilter)
       const res = await fetch(`/api/matters?${params.toString()}`)
       if (!res.ok) throw new Error()
-      setMatters(await res.json())
-    } catch {
+      const data = await res.json()
+      log.info('matters loaded', { count: data.length })
+      setMatters(data)
+    } catch (err) {
+      log.error('failed to load matters', err)
       toast.error('Failed to load matters')
     } finally {
       setLoading(false)
@@ -219,7 +227,7 @@ export function MattersView() {
           </h1>
         </div>
         <button
-          onClick={() => setSheetOpen(true)}
+          onClick={() => { log.info('opening create matter form'); setSheetOpen(true) }}
           style={{
             fontFamily: 'var(--font-noto-sans)',
             fontSize: 12,

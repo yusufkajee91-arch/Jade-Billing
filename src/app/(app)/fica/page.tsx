@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation'
 import { ShieldCheck } from 'lucide-react'
 import { FicaBadge } from '@/components/ui/fica-badge'
 import { formatEntityType } from '@/lib/entity-types'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('FicaPage')
 
 interface Client {
   id: string
@@ -35,16 +38,24 @@ const STATUS_TABS = [
 type TabId = (typeof STATUS_TABS)[number]['id']
 
 export default function FicaPage() {
+  log.info('render')
   const router = useRouter()
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabId>('all')
 
   const fetchClients = useCallback(async () => {
+    log.info('fetching clients for FICA compliance')
     setLoading(true)
     try {
       const res = await fetch('/api/clients')
-      if (res.ok) setClients(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        log.info('clients loaded for FICA', { count: data.length })
+        setClients(data)
+      } else {
+        log.error('failed to fetch clients', { status: res.status })
+      }
     } finally {
       setLoading(false)
     }

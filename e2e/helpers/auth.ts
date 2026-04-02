@@ -1,5 +1,6 @@
 export const ADMIN_STORAGE = 'e2e/.auth/admin.json'
 export const FEE_EARNER_STORAGE = 'e2e/.auth/fee-earner.json'
+export const ASSISTANT_STORAGE = 'e2e/.auth/assistant.json'
 
 export const ADMIN_USER = {
   email: 'admin@dcco.law',
@@ -17,4 +18,13 @@ export const FEE_EARNER_USER = {
   lastName: 'Earner',
   initials: 'FE',
   role: 'fee_earner',
+}
+
+export const ASSISTANT_USER = {
+  email: 'assistant@dcco.law',
+  password: 'Assist1234!',
+  firstName: 'Office',
+  lastName: 'Assistant',
+  initials: 'OA',
+  role: 'assistant',
 }

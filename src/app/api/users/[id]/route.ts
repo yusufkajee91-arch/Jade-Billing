@@ -4,6 +4,9 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
+import { apiLogger } from '@/lib/debug'
+
+const log = apiLogger('users/[id]')
 
 const updateUserSchema = z.object({
   firstName: z.string().min(1).optional(),
@@ -40,43 +43,64 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  log.info('GET request received')
   const session = await getServerSession(authOptions)
   if (!session) {
+    log.warn('GET unauthorised — no session')
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
   if (session.user.role !== 'admin') {
+    log.warn('GET forbidden — role:', session.user.role)
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const { id } = await params
-  const user = await prisma.user.findUnique({
-    where: { id },
-    select: userSelectFields,
-  })
+  log.debug('GET user id:', id)
 
-  if (!user) {
-    return NextResponse.json({ error: 'User not found' }, { status: 404 })
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: userSelectFields,
+    })
+
+    if (!user) {
+      log.warn('GET user not found:', id)
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    log.info('GET completed successfully — user:', id)
+    return NextResponse.json(user)
+  } catch (err) {
+    log.error('GET failed:', err)
+    return NextResponse.json(
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined } : undefined },
+      { status: 500 },
+    )
   }
-
-  return NextResponse.json(user)
 }
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  log.info('PATCH request received')
   const session = await getServerSession(authOptions)
   if (!session) {
+    log.warn('PATCH unauthorised — no session')
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
   if (session.user.role !== 'admin') {
+    log.warn('PATCH forbidden — role:', session.user.role)
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const { id } = await params
+  log.debug('PATCH user id:', id)
   const body = await request.json()
+  log.debug('PATCH body:', { ...body, password: body.password ? '[REDACTED]' : undefined })
   const parsed = updateUserSchema.safeParse(body)
   if (!parsed.success) {
+    log.warn('PATCH validation failed:', parsed.error.flatten())
     return NextResponse.json(
       { error: 'Validation failed', details: parsed.error.flatten() },
       { status: 400 },
@@ -85,16 +109,25 @@ export async function PATCH(
 
   const { password, ...rest } = parsed.data
 
-  const updateData: Record<string, unknown> = { ...rest }
-  if (password) {
-    updateData.passwordHash = await bcrypt.hash(password, 12)
+  try {
+    const updateData: Record<string, unknown> = { ...rest }
+    if (password) {
+      updateData.passwordHash = await bcrypt.hash(password, 12)
+    }
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: updateData,
+      select: userSelectFields,
+    })
+
+    log.info('PATCH completed successfully — user updated:', id)
+    return NextResponse.json(user)
+  } catch (err) {
+    log.error('PATCH failed:', err)
+    return NextResponse.json(
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined } : undefined },
+      { status: 500 },
+    )
   }
-
-  const user = await prisma.user.update({
-    where: { id },
-    data: updateData,
-    select: userSelectFields,
-  })
-
-  return NextResponse.json(user)
 }

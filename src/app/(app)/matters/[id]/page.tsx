@@ -3,6 +3,9 @@ import { getServerSession } from 'next-auth/next'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { MatterDetail } from '@/components/matters/matter-detail'
+import { pageLogger } from '@/lib/debug'
+
+const log = pageLogger('matters/[id]')
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -10,8 +13,12 @@ interface PageProps {
 
 export default async function MatterDetailPage({ params }: PageProps) {
   const { id } = await params
+  log.info('Rendering matter detail page for:', id)
   const session = await getServerSession(authOptions)
-  if (!session) redirect('/login')
+  if (!session) {
+    log.warn('No session, redirecting to login')
+    redirect('/login')
+  }
 
   const matter = await prisma.matter.findUnique({
     where: { id },
@@ -48,8 +55,11 @@ export default async function MatterDetailPage({ params }: PageProps) {
   })
 
   if (!matter) {
+    log.warn('Matter not found:', id)
     redirect('/matters')
   }
+
+  log.debug('Matter loaded:', { matterCode: matter.matterCode, clientId: matter.clientId })
 
   // Access check
   const isAdmin = session.user.role === 'admin'
@@ -57,6 +67,7 @@ export default async function MatterDetailPage({ params }: PageProps) {
   const hasAccess = matter.matterUsers.some((mu) => mu.userId === session.user.id)
 
   if (!isAdmin && !isOwner && !hasAccess) {
+    log.warn('Access denied for user:', session.user.id)
     redirect('/matters')
   }
 

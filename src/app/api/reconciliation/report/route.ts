@@ -3,19 +3,30 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { TrustEntryType } from '@/generated/prisma'
+import { apiLogger } from '@/lib/debug'
+
+const log = apiLogger('reconciliation/report')
 
 // ─── GET /api/reconciliation/report?statementId=UUID ─────────────────────────
 
 export async function GET(request: NextRequest) {
+  log.info('GET request received')
+  try {
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  if (!session) {
+    log.warn('GET rejected: unauthorised')
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  }
   if (session.user.role !== 'admin') {
+    log.warn('GET rejected: forbidden', { role: session.user.role })
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const { searchParams } = new URL(request.url)
   const statementId = searchParams.get('statementId')
+  log.debug('Query params:', { statementId })
   if (!statementId) {
+    log.warn('GET rejected: missing statementId')
     return NextResponse.json({ error: 'statementId is required' }, { status: 400 })
   }
 
@@ -53,6 +64,7 @@ export async function GET(request: NextRequest) {
   })
 
   if (!statement) {
+    log.warn('GET rejected: statement not found', { statementId })
     return NextResponse.json({ error: 'Statement not found' }, { status: 404 })
   }
 
@@ -156,6 +168,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  log.debug('Reconciliation summary:', { totalLines: statement.lines.length, matchedLines: matchedLines.length, unmatchedLines: unmatchedLines.length, adjustedBankBalance, isBalanced })
+  log.info('GET completed successfully')
   return NextResponse.json({
     statement: {
       id: statement.id,
@@ -182,4 +196,11 @@ export async function GET(request: NextRequest) {
     lines: statement.lines,
     unmatchedLedgerEntries,
   })
+  } catch (error) {
+    log.error('GET failed:', error)
+    return NextResponse.json(
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined } : undefined },
+      { status: 500 }
+    )
+  }
 }

@@ -1,6 +1,9 @@
 'use client'
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('TimeRecordingProvider')
 
 interface TimeRecordingContextValue {
   open: (matterId?: string) => void
@@ -21,12 +24,19 @@ export function TimeRecordingProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false)
   const [defaultMatterId, setDefaultMatterId] = useState<string | undefined>()
 
+  useEffect(() => {
+    log.info('TimeRecordingProvider mounted')
+    return () => log.info('TimeRecordingProvider unmounted')
+  }, [])
+
   const open = useCallback((matterId?: string) => {
+    log.info('Opening time recording slide-over', matterId ? `for matter: ${matterId}` : '(no specific matter)')
     setDefaultMatterId(matterId)
     setIsOpen(true)
   }, [])
 
   const close = useCallback(() => {
+    log.info('Closing time recording slide-over')
     setIsOpen(false)
     setDefaultMatterId(undefined)
   }, [])

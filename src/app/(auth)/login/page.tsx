@@ -11,6 +11,9 @@ import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('LoginPage')
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -33,6 +36,7 @@ export default function LoginPage() {
   })
 
   const onSubmit = async (data: LoginFormData) => {
+    log.info('Login attempt for:', data.email)
     setAuthError(null)
     const result = await signIn('credentials', {
       email: data.email,
@@ -41,8 +45,10 @@ export default function LoginPage() {
     })
 
     if (result?.error) {
+      log.warn('Login failed:', result.error)
       setAuthError('Invalid email address or password. Please try again.')
     } else if (result?.ok) {
+      log.info('Login successful, redirecting to dashboard')
       router.push('/dashboard')
       router.refresh()
     }

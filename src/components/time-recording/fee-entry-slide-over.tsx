@@ -9,6 +9,9 @@ import {
 } from '@/components/ui/sheet'
 import { FeeEntryForm } from './fee-entry-form'
 import type { Session } from 'next-auth'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('FeeEntrySlideOver')
 
 interface FeeEntrySlideOverProps {
   session: Session
@@ -17,6 +20,8 @@ interface FeeEntrySlideOverProps {
 
 export function FeeEntrySlideOver({ session, onSaved }: FeeEntrySlideOverProps) {
   const { isOpen, close, defaultMatterId } = useTimeRecording()
+
+  log.debug('FeeEntrySlideOver rendered', { isOpen, defaultMatterId, sessionUser: session?.user?.id })
 
   return (
     <Sheet open={isOpen} onOpenChange={(o) => !o && close()}>

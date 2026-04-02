@@ -3,11 +3,11 @@ import { PrismaPg } from '@prisma/adapter-pg'
 import bcrypt from 'bcryptjs'
 import * as dotenv from 'dotenv'
 
-dotenv.config({ path: '.env.local' })
+dotenv.config({ path: process.env.E2E_ENV_FILE || process.env.DOTENV_CONFIG_PATH || '.env.local' })
 
 const connectionString = process.env.DATABASE_URL
 if (!connectionString) {
-  throw new Error('DATABASE_URL is not set. Create a .env.local file.')
+  throw new Error('DATABASE_URL is not set. Configure the selected env file before seeding.')
 }
 
 const adapter = new PrismaPg({ connectionString })
@@ -98,6 +98,67 @@ async function main() {
     })
   }
 
+  // 5b. Fee Schedules
+  const feeScheduleCategories = [
+    { id: 'seed-fsc-trademarks', name: 'Trade Marks', jurisdiction: 'South Africa', currency: 'ZAR' },
+    { id: 'seed-fsc-general', name: 'General', jurisdiction: 'South Africa', currency: 'ZAR' },
+  ]
+
+  for (const category of feeScheduleCategories) {
+    await prisma.feeScheduleCategory.upsert({
+      where: { id: category.id },
+      update: {},
+      create: category,
+    })
+  }
+
+  const feeScheduleItems = [
+    {
+      id: 'seed-fsi-tm-search',
+      categoryId: 'seed-fsc-trademarks',
+      section: 'Filing',
+      description: 'Trade mark availability search',
+      officialFeeCents: 0,
+      professionalFeeCents: 150000,
+      sortOrder: 0,
+    },
+    {
+      id: 'seed-fsi-tm-filing',
+      categoryId: 'seed-fsc-trademarks',
+      section: 'Filing',
+      description: 'Trade mark application filing',
+      officialFeeCents: 59000,
+      professionalFeeCents: 275000,
+      sortOrder: 1,
+    },
+    {
+      id: 'seed-fsi-tm-renewal',
+      categoryId: 'seed-fsc-trademarks',
+      section: 'Renewals',
+      description: 'Trade mark renewal filing',
+      officialFeeCents: 40000,
+      professionalFeeCents: 210000,
+      sortOrder: 0,
+    },
+    {
+      id: 'seed-fsi-gen-consult',
+      categoryId: 'seed-fsc-general',
+      section: 'Advisory',
+      description: 'General consultation',
+      officialFeeCents: 0,
+      professionalFeeCents: 125000,
+      sortOrder: 0,
+    },
+  ]
+
+  for (const item of feeScheduleItems) {
+    await prisma.feeScheduleItem.upsert({
+      where: { id: item.id },
+      update: {},
+      create: item,
+    })
+  }
+
   // 6. Departments
   const departments = [
     { id: 'seed-dept-default', name: 'Default', sortOrder: 0 },
@@ -114,7 +175,27 @@ async function main() {
     })
   }
 
-  // 7. Admin user
+  // 8. Chart of Accounts
+  const glAccounts = [
+    { id: 'seed-gl-1001', code: '1001', name: 'Trust Bank', accountType: 'asset' as const, isSystem: true, sortOrder: 0 },
+    { id: 'seed-gl-1002', code: '1002', name: 'Business Current', accountType: 'asset' as const, isSystem: true, sortOrder: 1 },
+    { id: 'seed-gl-1010', code: '1010', name: 'Debtors Control', accountType: 'asset' as const, isSystem: true, sortOrder: 2 },
+    { id: 'seed-gl-2001', code: '2001', name: 'VAT Output', accountType: 'liability' as const, isSystem: true, sortOrder: 0 },
+    { id: 'seed-gl-2010', code: '2010', name: 'Trust Creditors', accountType: 'liability' as const, isSystem: true, sortOrder: 1 },
+    { id: 'seed-gl-4001', code: '4001', name: 'Professional Fees Income', accountType: 'income' as const, isSystem: true, sortOrder: 0 },
+    { id: 'seed-gl-4002', code: '4002', name: 'Consulting Income', accountType: 'income' as const, isSystem: true, sortOrder: 1 },
+    { id: 'seed-gl-5001', code: '5001', name: 'Disbursements Expense', accountType: 'expense' as const, isSystem: true, sortOrder: 0 },
+  ]
+
+  for (const account of glAccounts) {
+    await prisma.glAccount.upsert({
+      where: { id: account.id },
+      update: {},
+      create: account,
+    })
+  }
+
+  // 9. Admin user
   const passwordHash = await bcrypt.hash('Admin1234!', 12)
   await prisma.user.upsert({
     where: { email: 'admin@dcco.law' },

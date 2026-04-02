@@ -15,6 +15,9 @@ import {
 import { Button } from '@/components/ui/button'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import type { Session } from 'next-auth'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('ReconciliationView')
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -148,6 +151,7 @@ interface Props {
 }
 
 export function ReconciliationView({ session }: Props) {
+  log.info('mount', { role: session.user.role })
   const isAdmin = session.user.role === 'admin'
 
   const [activeTab, setActiveTab] = useState<'statements' | 'reconcile'>('statements')
@@ -169,34 +173,53 @@ export function ReconciliationView({ session }: Props) {
   // ─── Data loaders ────────────────────────────────────────────────────────
 
   const loadStatements = useCallback(async () => {
+    log.debug('loading bank statements')
     setLoadingStatements(true)
     setLoadError(null)
     try {
       const res = await fetch('/api/bank-statements')
-      if (res.ok) setStatements(await res.json())
-      else setLoadError('Failed to load statements — please refresh the page')
+      if (res.ok) {
+        const data = await res.json()
+        log.info('bank statements loaded', { count: data.length })
+        setStatements(data)
+      } else {
+        log.error('bank statements load failed', { status: res.status })
+        setLoadError('Failed to load statements — please refresh the page')
+      }
     } finally {
       setLoadingStatements(false)
     }
   }, [])
 
   const loadDetail = useCallback(async (id: string) => {
+    log.debug('loading statement detail', { id })
     setLoadingDetail(true)
     try {
       const res = await fetch(`/api/bank-statements/${id}`)
-      if (res.ok) setSelectedStatement(await res.json())
-      else toast.error('Failed to load statement detail')
+      if (res.ok) {
+        log.info('statement detail loaded', { id })
+        setSelectedStatement(await res.json())
+      } else {
+        log.error('statement detail load failed', { id, status: res.status })
+        toast.error('Failed to load statement detail')
+      }
     } finally {
       setLoadingDetail(false)
     }
   }, [])
 
   const loadReport = useCallback(async (id: string) => {
+    log.debug('loading reconciliation report', { statementId: id })
     setLoadingReport(true)
     try {
       const res = await fetch(`/api/reconciliation/report?statementId=${id}`)
-      if (res.ok) setReport(await res.json())
-      else toast.error('Failed to load reconciliation report')
+      if (res.ok) {
+        log.info('reconciliation report loaded', { statementId: id })
+        setReport(await res.json())
+      } else {
+        log.error('reconciliation report load failed', { statementId: id, status: res.status })
+        toast.error('Failed to load reconciliation report')
+      }
     } finally {
       setLoadingReport(false)
     }
@@ -230,6 +253,7 @@ export function ReconciliationView({ session }: Props) {
 
   const handleUpload = useCallback(
     async (accountType: string, file: File): Promise<string | null> => {
+      log.info('uploading bank statement', { accountType, fileName: file.name, fileSize: file.size })
       const formData = new FormData()
       formData.append('file', file)
       formData.append('accountType', accountType)
@@ -240,11 +264,13 @@ export function ReconciliationView({ session }: Props) {
       })
 
       if (res.ok) {
+        log.info('bank statement imported successfully')
         toast.success('Statement imported successfully')
         setShowUploadForm(false)
         await loadStatements()
         return null
       } else {
+        log.error('bank statement upload failed', { status: res.status })
         const text = await res.text().catch(() => '')
         let message = `Upload failed (HTTP ${res.status})`
         try {
@@ -286,14 +312,17 @@ export function ReconciliationView({ session }: Props) {
 
   const handleAutoMatch = useCallback(async () => {
     if (!selectedStatement) return
+    log.info('running auto-match', { statementId: selectedStatement.id })
     const res = await fetch(`/api/bank-statements/${selectedStatement.id}/auto-match`, {
       method: 'POST',
     })
     if (res.ok) {
       const { matchesCreated } = await res.json()
+      log.info('auto-match completed', { matchesCreated })
       toast.success(`Auto-matched ${matchesCreated} line${matchesCreated !== 1 ? 's' : ''}`)
       await refreshReconcile()
     } else {
+      log.error('auto-match failed', { statementId: selectedStatement.id, status: res.status })
       toast.error('Auto-match failed')
     }
   }, [selectedStatement, refreshReconcile])
@@ -303,6 +332,7 @@ export function ReconciliationView({ session }: Props) {
   const handleManualMatch = useCallback(
     async (ledgerEntry: LedgerEntry, isTrust: boolean) => {
       if (!selectedBankLine) return
+      log.info('creating manual match', { bankLineId: selectedBankLine.id, ledgerEntryId: ledgerEntry.id, isTrust })
       const body: Record<string, string> = {
         bankStatementLineId: selectedBankLine.id,
       }
@@ -315,11 +345,13 @@ export function ReconciliationView({ session }: Props) {
         body: JSON.stringify(body),
       })
       if (res.ok) {
+        log.info('manual match created')
         toast.success('Match created')
         setSelectedBankLine(null)
         await refreshReconcile()
       } else {
         const data = await res.json().catch(() => ({}))
+        log.error('manual match failed', { error: data.error })
         toast.error(data.error ?? 'Match failed')
       }
     },
@@ -330,11 +362,14 @@ export function ReconciliationView({ session }: Props) {
 
   const handleUnmatch = useCallback(
     async (matchId: string) => {
+      log.info('removing match', { matchId })
       const res = await fetch(`/api/bank-matches/${matchId}`, { method: 'DELETE' })
       if (res.ok || res.status === 204) {
+        log.info('match removed', { matchId })
         toast.success('Match removed')
         await refreshReconcile()
       } else {
+        log.error('unmatch failed', { matchId, status: res.status })
         toast.error('Unmatch failed')
       }
     },

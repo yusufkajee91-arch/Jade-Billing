@@ -3,6 +3,9 @@
 import { useState, useEffect, Fragment } from 'react'
 import { ChevronDown, ChevronRight, Receipt } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('DebtorsView')
 
 interface DebtorInvoice {
   id: string
@@ -48,17 +51,23 @@ function AgeCell({ cents, color }: { cents: number; color: string }) {
 }
 
 export function DebtorsView() {
+  log.info('mount')
   const [debtors, setDebtors] = useState<Debtor[]>([])
   const [grandTotal, setGrandTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   useEffect(() => {
+    log.debug('loading debtors data')
     fetch('/api/debtors')
       .then(r => r.json())
       .then(data => {
+        log.info('debtors loaded', { debtorCount: data.debtors?.length ?? 0, grandTotal: data.grandTotal ?? 0 })
         setDebtors(data.debtors ?? [])
         setGrandTotal(data.grandTotal ?? 0)
+      })
+      .catch(err => {
+        log.error('debtors loading failed', err)
       })
       .finally(() => setLoading(false))
   }, [])

@@ -17,6 +17,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { SettingsNav } from '@/components/layout/settings-nav'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('FirmSettingsPage')
 
 const MONTHS = [
   { value: '1', label: 'January' },
@@ -103,6 +106,7 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
 }
 
 export default function FirmSettingsPage() {
+  log.info('render')
   const { data: session, status } = useSession()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -138,9 +142,11 @@ export default function FirmSettingsPage() {
     }
 
     // Load existing settings
+    log.info('loading firm settings')
     fetch('/api/firm-settings')
       .then((r) => r.json())
       .then((data) => {
+        log.info('firm settings loaded', { firmName: data?.firmName })
         if (data) {
           const primaryOffice = data.offices?.find(
             (o: { isPrimary: boolean }) => o.isPrimary,
@@ -183,12 +189,13 @@ export default function FirmSettingsPage() {
         }
         setLoading(false)
       })
-      .catch(() => setLoading(false))
+      .catch((err) => { log.error('failed to load firm settings', err); setLoading(false) })
   }, [session, status, router, reset])
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    log.info('uploading logo', { fileName: file.name, size: file.size })
     setUploadingLogo(true)
     try {
       const formData = new FormData()
@@ -196,9 +203,11 @@ export default function FirmSettingsPage() {
       const res = await fetch('/api/upload', { method: 'POST', body: formData })
       if (!res.ok) throw new Error('Upload failed')
       const data = await res.json()
+      log.info('logo uploaded', { filePath: data.filePath })
       setLogoPreview(data.filePath)
       toast.success('Logo uploaded successfully')
-    } catch {
+    } catch (err) {
+      log.error('logo upload failed', err)
       toast.error('Failed to upload logo')
     } finally {
       setUploadingLogo(false)
@@ -206,6 +215,7 @@ export default function FirmSettingsPage() {
   }
 
   const onSubmit = async (data: SettingsFormData) => {
+    log.info('saving firm settings', { firmName: data.firmName })
     try {
       const res = await fetch('/api/firm-settings', {
         method: 'PUT',
@@ -250,12 +260,14 @@ export default function FirmSettingsPage() {
       })
 
       if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || 'Failed to save settings')
+        const errData = await res.json()
+        throw new Error(errData.error || 'Failed to save settings')
       }
 
+      log.info('firm settings saved successfully')
       toast.success('Firm settings saved successfully')
     } catch (err) {
+      log.error('failed to save firm settings', err)
       toast.error(err instanceof Error ? err.message : 'Failed to save settings')
     }
   }

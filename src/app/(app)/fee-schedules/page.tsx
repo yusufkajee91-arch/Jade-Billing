@@ -5,6 +5,9 @@ import { Plus, Pencil, Check, X, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatCurrency } from '@/lib/utils'
 import { useSession } from 'next-auth/react'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('FeeSchedulesPage')
 
 interface Category {
   id: string
@@ -45,6 +48,7 @@ function fmt(cents: number) {
 }
 
 export default function FeeSchedulesPage() {
+  log.info('render')
   const { data: session } = useSession()
   const isAdmin = session?.user?.role === 'admin'
 
@@ -66,13 +70,16 @@ export default function FeeSchedulesPage() {
   const [newOfficial, setNewOfficial] = useState('0')
 
   const fetchCategories = useCallback(async () => {
+    log.info('fetching fee schedule categories')
     try {
       const res = await fetch('/api/fee-schedules')
       if (!res.ok) throw new Error()
       const data: Category[] = await res.json()
+      log.info('fee schedule categories loaded', { count: data.length })
       setCategories(data)
       if (data.length > 0 && !activeCatId) setActiveCatId(data[0].id)
-    } catch {
+    } catch (err) {
+      log.error('failed to load fee schedules', err)
       toast.error('Failed to load fee schedules')
     } finally {
       setLoading(false)
@@ -80,12 +87,16 @@ export default function FeeSchedulesPage() {
   }, [activeCatId])
 
   const fetchItems = useCallback(async (catId: string) => {
+    log.debug('fetching schedule items', { categoryId: catId })
     setLoadingItems(true)
     try {
       const res = await fetch(`/api/fee-schedules/${catId}/items`)
       if (!res.ok) throw new Error()
-      setGroups(await res.json())
-    } catch {
+      const data = await res.json()
+      log.info('schedule items loaded', { groupCount: data.length })
+      setGroups(data)
+    } catch (err) {
+      log.error('failed to load schedule items', err)
       toast.error('Failed to load schedule items')
     } finally {
       setLoadingItems(false)

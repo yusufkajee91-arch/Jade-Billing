@@ -12,6 +12,9 @@ import {
   X,
 } from 'lucide-react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('CommandPalette')
 
 interface ClientResult {
   id: string
@@ -53,6 +56,7 @@ function highlight(text: string, query: string): React.ReactNode {
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false)
+  log.debug('render')
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResults | null>(null)
   const [loading, setLoading] = useState(false)
@@ -73,8 +77,11 @@ export function CommandPalette() {
   // Reset on close
   useEffect(() => {
     if (!open) {
+      log.debug('palette closed')
       setQuery('')
       setResults(null)
+    } else {
+      log.info('palette opened')
     }
   }, [open])
 
@@ -83,14 +90,17 @@ export function CommandPalette() {
       setResults(null)
       return
     }
+    log.debug('searching', { query: q })
     setLoading(true)
     try {
       const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`)
       if (res.ok) {
-        setResults(await res.json())
+        const data = await res.json()
+        log.info('search results', { query: q, clientCount: data.clients?.length ?? 0, matterCount: data.matters?.length ?? 0 })
+        setResults(data)
       }
     } catch {
-      // silently ignore
+      log.warn('search request failed', { query: q })
     } finally {
       setLoading(false)
     }

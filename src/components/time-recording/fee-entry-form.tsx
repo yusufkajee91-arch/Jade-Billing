@@ -6,6 +6,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { Calculator } from 'lucide-react'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('FeeEntryForm')
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -119,6 +122,8 @@ export function FeeEntryForm({
 }: FeeEntryFormProps) {
   const isEdit = Boolean(existingEntry)
 
+  log.info('FeeEntryForm rendered', { isEdit, defaultMatterId, stayOpenAfterSave })
+
   const [matters, setMatters] = useState<Matter[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [feeLevels, setFeeLevels] = useState<FeeLevel[]>([])
@@ -183,18 +188,28 @@ export function FeeEntryForm({
 
   // Load lookup data
   useEffect(() => {
+    log.info('Loading lookup data for fee entry form')
     Promise.all([
-      fetch('/api/matters?active=true').then((r) => r.json()),
-      fetch('/api/users').then((r) => r.json()),
-      fetch('/api/lookup?type=fee_levels').then((r) => r.json()),
-      fetch('/api/lookup?type=posting_codes').then((r) => r.json()),
-      fetch('/api/firm-settings').then((r) => r.json()),
+      fetch('/api/matters?active=true').then((r) => { log.debug('Matters response status:', r.status); return r.json() }),
+      fetch('/api/users').then((r) => { log.debug('Users response status:', r.status); return r.json() }),
+      fetch('/api/lookup?type=fee_levels').then((r) => { log.debug('Fee levels response status:', r.status); return r.json() }),
+      fetch('/api/lookup?type=posting_codes').then((r) => { log.debug('Posting codes response status:', r.status); return r.json() }),
+      fetch('/api/firm-settings').then((r) => { log.debug('Firm settings response status:', r.status); return r.json() }),
     ]).then(([mattersData, usersData, feeLevelsData, postingCodesData, firmData]) => {
+      log.info('Lookup data loaded:', {
+        matters: Array.isArray(mattersData?.matters ?? mattersData) ? (mattersData?.matters ?? mattersData).length : 'not array',
+        users: Array.isArray(usersData?.users ?? usersData) ? (usersData?.users ?? usersData).length : 'not array',
+        feeLevels: Array.isArray(feeLevelsData) ? feeLevelsData.length : 'not array',
+        postingCodes: Array.isArray(postingCodesData) ? postingCodesData.length : 'not array',
+        billingBlocksEnabled: firmData?.billingBlocksEnabled,
+      })
       setMatters(mattersData?.matters ?? mattersData ?? [])
       setUsers(usersData?.users ?? usersData ?? [])
       setFeeLevels(feeLevelsData ?? [])
       setPostingCodes(postingCodesData ?? [])
       setBillingBlocksEnabled(firmData?.billingBlocksEnabled ?? true)
+    }).catch((error) => {
+      log.error('Failed to load lookup data:', error)
     })
 
     // Load all fee schedule items for quick lookup
@@ -273,6 +288,7 @@ export function FeeEntryForm({
   }
 
   const onSubmit = async (data: FormData) => {
+    log.info('Submitting fee entry', { entryType: data.entryType, matterId: data.matterId, isEdit })
     // Parse quantities for submission
     const rawMins = data.entryType === 'time' ? parseTimeToMinutes(data.timeInput ?? '') : null
     const unitQtyThousandths =
@@ -298,6 +314,9 @@ export function FeeEntryForm({
     const url = isEdit ? `/api/fee-entries/${existingEntry!.id}` : '/api/fee-entries'
     const method = isEdit ? 'PATCH' : 'POST'
 
+    log.debug('Submitting to:', url, 'method:', method)
+    log.debug('Payload:', payload)
+
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
@@ -306,9 +325,11 @@ export function FeeEntryForm({
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}))
+      log.error('Fee entry save failed:', { status: res.status, error: err })
       throw new Error(err.error || 'Failed to save entry')
     }
 
+    log.info('Fee entry saved successfully')
     toast.success(isEdit ? 'Entry updated' : 'Entry recorded')
     onSaved()
 

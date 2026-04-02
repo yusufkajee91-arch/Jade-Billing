@@ -2,18 +2,26 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { apiLogger } from '@/lib/debug'
+
+const log = apiLogger('reports/time-summary')
 
 // GET /api/reports/time-summary?from=YYYY-MM-DD&to=YYYY-MM-DD&earnerId=UUID
 // Detailed time recording entries for the period, optionally filtered by earner.
 export async function GET(request: NextRequest) {
+  log.info('GET request received')
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  if (!session) {
+    log.warn('Unauthorized request — no session')
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  }
 
   const { searchParams } = new URL(request.url)
   const from = searchParams.get('from')
   const to = searchParams.get('to')
   const earnerId = searchParams.get('earnerId')
   const isAdmin = session.user.role === 'admin'
+  log.debug('Query params:', { from, to, earnerId, isAdmin })
 
   // Non-admins can only see their own entries
   const resolvedEarnerId = isAdmin ? (earnerId ?? undefined) : session.user.id
@@ -43,6 +51,7 @@ export async function GET(request: NextRequest) {
       },
       orderBy: [{ entryDate: 'asc' }, { matter: { matterCode: 'asc' } }],
     })
+    log.debug('Fee entries fetched:', { count: entries.length })
 
     const totals = entries.reduce(
       (acc, e) => ({
@@ -63,6 +72,7 @@ export async function GET(request: NextRequest) {
         })
       : []
 
+    log.info('GET completed successfully', { entryCount: entries.length, totalCents: totals.totalCents, billableCents: totals.billableCents })
     return NextResponse.json({
       entries: entries.map((e) => ({
         id: e.id,
@@ -82,8 +92,11 @@ export async function GET(request: NextRequest) {
       totals,
       feeEarners,
     })
-  } catch (err) {
-    console.error('[GET /api/reports/time-summary]', err)
-    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })
+  } catch (error) {
+    log.error('GET failed:', error)
+    return NextResponse.json(
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined } : undefined },
+      { status: 500 }
+    )
   }
 }

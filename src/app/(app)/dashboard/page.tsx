@@ -4,14 +4,22 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { DashboardShell } from '@/components/dashboard/dashboard-shell'
+import { pageLogger } from '@/lib/debug'
+
+const log = pageLogger('dashboard')
 
 export default async function DashboardPage() {
+  log.info('Rendering dashboard page')
   const session = await getServerSession(authOptions)
-  if (!session) redirect('/login')
+  if (!session) {
+    log.warn('No session found, redirecting to login')
+    redirect('/login')
+  }
 
   const userId = session.user.id
   const isAdmin = session.user.role === 'admin'
   const firstName = session.user.name?.split(' ')[0] ?? 'there'
+  log.debug('Dashboard user:', { userId, isAdmin, firstName })
 
   // ─── Date boundaries (SAST = UTC+2) ─────────────────────────────────────────
   const nowSAST = new Date(Date.now() + 2 * 60 * 60 * 1000)
@@ -29,6 +37,7 @@ export default async function DashboardPage() {
   nextMonthStart.setUTCMonth(nextMonthStart.getUTCMonth() + 1)
 
   // ─── Parallel data fetches ───────────────────────────────────────────────────
+  log.debug('Fetching dashboard data in parallel')
   const [wipGroups, todayDiary, weekDiary, unsentInvoices, calendarDiary] = await Promise.all([
     prisma.feeEntry.groupBy({
       by: ['matterId'],
@@ -164,6 +173,16 @@ export default async function DashboardPage() {
   // ─── Serialise diary dates ────────────────────────────────────────────────────
   const serializeDiary = <T extends { dueDate: Date }>(entries: T[]) =>
     entries.map((e) => ({ ...e, dueDate: new Date(e.dueDate).toISOString().slice(0, 10) }))
+
+  log.info('Dashboard data loaded:', {
+    wipCount: wip.length,
+    wipTotal,
+    todayDiaryCount: todayDiary.length,
+    weekDiaryCount: weekDiary.length,
+    unsentInvoicesCount: unsentInvoices.length,
+    isAdmin,
+    adminKpisPresent: !!adminKpis,
+  })
 
   return (
     <div

@@ -18,6 +18,9 @@ import {
 } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
 import { formatMinutes } from '@/lib/time-parser'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('InvoiceCreateForm')
 
 interface FeeEntry {
   id: string
@@ -59,6 +62,7 @@ function durationLabel(entry: FeeEntry): string {
 }
 
 export function InvoiceCreateForm({ matter, feeEntries, preselectedIds }: InvoiceCreateFormProps) {
+  log.info('mount', { matterId: matter.id, matterCode: matter.matterCode, feeEntryCount: feeEntries.length, preselectedCount: preselectedIds.length })
   const router = useRouter()
 
   const initial = preselectedIds.length > 0
@@ -91,9 +95,11 @@ export function InvoiceCreateForm({ matter, feeEntries, preselectedIds }: Invoic
 
   const handleSubmit = async () => {
     if (selected.size === 0) {
+      log.warn('submission attempted with no entries selected')
       toast.error('Select at least one entry to invoice')
       return
     }
+    log.info('submitting invoice', { matterId: matter.id, invoiceType, selectedCount: selected.size, totalCents })
     setSubmitting(true)
     try {
       const res = await fetch('/api/invoices', {
@@ -108,12 +114,15 @@ export function InvoiceCreateForm({ matter, feeEntries, preselectedIds }: Invoic
       })
       if (!res.ok) {
         const err = await res.json()
+        log.error('invoice creation failed', { status: res.status, error: err.error })
         throw new Error(err.error || 'Failed to create invoice')
       }
       const invoice = await res.json()
+      log.info('invoice created', { invoiceId: invoice.id })
       toast.success('Invoice created')
       router.push(`/invoices/${invoice.id}`)
     } catch (err) {
+      log.error('invoice creation error', err)
       toast.error(err instanceof Error ? err.message : 'Failed to create invoice')
       setSubmitting(false)
     }

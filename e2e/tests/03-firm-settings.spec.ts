@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/console-capture'
 
 test.describe('Firm Settings (admin)', () => {
   test('settings page loads with firm name', async ({ page }) => {
@@ -15,16 +15,29 @@ test.describe('Firm Settings (admin)', () => {
     await firmNameInput.clear()
     await firmNameInput.fill('Dolata & Co Test Firm')
 
+    const saveFirmNameResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/firm-settings') &&
+        response.request().method() === 'PUT',
+    )
     await page.getByRole('button', { name: /save settings/i }).first().click()
+    expect((await saveFirmNameResponse).ok()).toBeTruthy()
 
     // Reload and verify persistence
     await page.reload()
+    await page.waitForLoadState('networkidle')
     await expect(page.locator('input[name="firmName"]')).toHaveValue('Dolata & Co Test Firm')
 
     // Restore original name
     await page.locator('input[name="firmName"]').clear()
     await page.locator('input[name="firmName"]').fill('Dolata & Co Attorneys')
+    const restoreFirmNameResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/firm-settings') &&
+        response.request().method() === 'PUT',
+    )
     await page.getByRole('button', { name: /save settings/i }).first().click()
+    expect((await restoreFirmNameResponse).ok()).toBeTruthy()
   })
 
   test('fill trust bank account fields, save, verify', async ({ page }) => {
@@ -47,9 +60,16 @@ test.describe('Firm Settings (admin)', () => {
     await trustBranchCode.clear()
     await trustBranchCode.fill('250655')
 
+    const saveTrustResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/firm-settings') &&
+        response.request().method() === 'PUT',
+    )
     await page.getByRole('button', { name: /save settings/i }).first().click()
+    expect((await saveTrustResponse).ok()).toBeTruthy()
 
     await page.reload()
+    await page.waitForLoadState('networkidle')
     await expect(page.locator('input[name="trustBankAccountNumber"]')).toHaveValue('1234567890')
   })
 
@@ -73,9 +93,16 @@ test.describe('Firm Settings (admin)', () => {
     await bizBranchCode.clear()
     await bizBranchCode.fill('250655')
 
+    const saveBusinessResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/firm-settings') &&
+        response.request().method() === 'PUT',
+    )
     await page.getByRole('button', { name: /save settings/i }).first().click()
+    expect((await saveBusinessResponse).ok()).toBeTruthy()
 
     await page.reload()
+    await page.waitForLoadState('networkidle')
     await expect(page.locator('input[name="businessBankAccountNumber"]')).toHaveValue('9876543210')
   })
 
@@ -99,9 +126,17 @@ test.describe('Firm Settings (admin)', () => {
     await vatNumber.clear()
     await vatNumber.fill('4123456789')
 
+    const saveResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/firm-settings') &&
+        response.request().method() === 'PUT',
+    )
     await page.getByRole('button', { name: /save settings/i }).first().click()
+    const response = await saveResponse
+    expect(response.ok()).toBeTruthy()
 
     await page.reload()
+    await page.waitForLoadState('networkidle')
     await expect(page.locator('input[name="vatRegistrationNumber"]')).toHaveValue('4123456789')
   })
 
@@ -152,5 +187,27 @@ test.describe('Firm Settings (admin)', () => {
 
     // Verify it appears in the table
     await expect(page.getByText('TEST01')).toBeVisible({ timeout: 5000 })
+  })
+})
+
+test.describe('Firm Settings (non-admin access denied)', () => {
+  test('assistant cannot access /settings', async ({ page, browser }) => {
+    const context = await browser.newContext({ storageState: 'e2e/.auth/assistant.json' })
+    const assistantPage = await context.newPage()
+
+    await assistantPage.goto('/settings', { waitUntil: 'domcontentloaded' })
+    await expect(assistantPage).not.toHaveURL(/\/settings$/)
+
+    await context.close()
+  })
+
+  test('fee earner cannot access /settings', async ({ browser }) => {
+    const context = await browser.newContext({ storageState: 'e2e/.auth/fee-earner.json' })
+    const feeEarnerPage = await context.newPage()
+
+    await feeEarnerPage.goto('/settings', { waitUntil: 'domcontentloaded' })
+    await expect(feeEarnerPage).not.toHaveURL(/\/settings$/)
+
+    await context.close()
   })
 })

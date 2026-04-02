@@ -69,3 +69,28 @@ Next.js · TypeScript · Tailwind CSS · shadcn/ui · PostgreSQL · Prisma · Ne
 | `npm run dev` | Start development server |
 | `npm run build` | Production build |
 | `npm run test:run` | Run tests |
+| `npm run test:e2e` | Run Playwright E2E against the local disposable test DB |
+| `npm run test:e2e:supabase` | Run Playwright E2E against a cloned Supabase DB configured in `.env.e2e.supabase` |
+
+## Supabase Staging E2E
+
+For a Supabase-backed E2E run, create a separate cloned/staging Supabase database first. Do not point the suite at your live production database.
+
+1. Copy the example env file:
+
+```bash
+cp .env.e2e.supabase.example .env.e2e.supabase
+```
+
+2. Fill in the cloned Supabase connection string.
+
+3. Run:
+
+```bash
+npm run test:e2e:supabase
+```
+
+The Supabase mode is destructive for the target staging database:
+- it resets the `public` schema before each run
+- it reruns migrations and seed data
+- it should only be used against a disposable cloned/staging Supabase database

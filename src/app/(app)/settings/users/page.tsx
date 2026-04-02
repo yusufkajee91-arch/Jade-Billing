@@ -26,7 +26,10 @@ import {
 } from '@/components/ui/select'
 import { SettingsNav } from '@/components/layout/settings-nav'
 import { cn } from '@/lib/utils'
+import { componentLogger } from '@/lib/debug'
 import React from 'react'
+
+const log = componentLogger('UsersPage')
 
 interface User {
   id: string
@@ -376,6 +379,7 @@ function UserForm({
 }
 
 export default function UsersPage() {
+  log.info('render')
   const { data: session, status } = useSession()
   const router = useRouter()
   const [users, setUsers] = useState<User[]>([])
@@ -384,11 +388,15 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null)
 
   const fetchUsers = useCallback(async () => {
+    log.info('fetching users')
     try {
       const res = await fetch('/api/users')
       if (!res.ok) throw new Error('Failed to load users')
-      setUsers(await res.json())
-    } catch {
+      const data = await res.json()
+      log.info('users loaded', { count: data.length })
+      setUsers(data)
+    } catch (err) {
+      log.error('failed to load users', err)
       toast.error('Failed to load users')
     } finally {
       setLoading(false)

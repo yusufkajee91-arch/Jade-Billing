@@ -16,6 +16,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formatCurrency } from '@/lib/utils'
 import { formatMinutes } from '@/lib/time-parser'
+import { componentLogger } from '@/lib/debug'
+
+const log = componentLogger('InvoicePreview')
 
 interface LineItem {
   id: string
@@ -118,6 +121,7 @@ const secondaryBtnStyle: React.CSSProperties = {
 }
 
 export function InvoicePreview({ invoice: initial }: { invoice: InvoiceData }) {
+  log.info('mount', { invoiceId: initial.id, invoiceNumber: initial.invoiceNumber, status: initial.status, invoiceType: initial.invoiceType, totalCents: initial.totalCents })
   const router = useRouter()
   const [invoice, setInvoice] = useState(initial)
   const [sendDialogOpen, setSendDialogOpen] = useState(false)
@@ -132,10 +136,12 @@ export function InvoicePreview({ invoice: initial }: { invoice: InvoiceData }) {
   const isProForma = invoice.invoiceType === 'pro_forma'
 
   const downloadPDF = () => {
+    log.info('downloading PDF', { invoiceId: invoice.id, invoiceNumber: invoice.invoiceNumber })
     window.open(`/api/invoices/${invoice.id}/pdf`, '_blank')
   }
 
   const transition = async (newStatus: string) => {
+    log.info('transitioning invoice', { invoiceId: invoice.id, from: invoice.status, to: newStatus })
     setTransitioning(true)
     try {
       const res = await fetch(`/api/invoices/${invoice.id}`, {
@@ -144,9 +150,12 @@ export function InvoicePreview({ invoice: initial }: { invoice: InvoiceData }) {
         body: JSON.stringify({ action: 'transition', status: newStatus }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
-      setInvoice(await res.json())
+      const updated = await res.json()
+      log.info('invoice transitioned', { newStatus: updated.status })
+      setInvoice(updated)
       toast.success('Invoice updated')
     } catch (err) {
+      log.error('invoice transition failed', err)
       toast.error(err instanceof Error ? err.message : 'Failed to update invoice')
     } finally {
       setTransitioning(false)
@@ -154,6 +163,7 @@ export function InvoicePreview({ invoice: initial }: { invoice: InvoiceData }) {
   }
 
   const sendInvoice = async () => {
+    log.info('sending invoice', { invoiceId: invoice.id, toEmail: sendEmail })
     setSending(true)
     try {
       const res = await fetch(`/api/invoices/${invoice.id}/send`, {
@@ -162,10 +172,13 @@ export function InvoicePreview({ invoice: initial }: { invoice: InvoiceData }) {
         body: JSON.stringify({ toEmail: sendEmail }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
-      setInvoice(await res.json())
+      const updated = await res.json()
+      log.info('invoice sent successfully', { invoiceId: invoice.id })
+      setInvoice(updated)
       setSendDialogOpen(false)
       toast.success(`Invoice sent to ${sendEmail}`)
     } catch (err) {
+      log.error('invoice send failed', err)
       toast.error(err instanceof Error ? err.message : 'Failed to send invoice')
     } finally {
       setSending(false)
@@ -173,6 +186,7 @@ export function InvoicePreview({ invoice: initial }: { invoice: InvoiceData }) {
   }
 
   const markPaid = async () => {
+    log.info('marking invoice as paid', { invoiceId: invoice.id, paidNote })
     setMarkingPaid(true)
     try {
       const res = await fetch(`/api/invoices/${invoice.id}`, {
@@ -181,10 +195,13 @@ export function InvoicePreview({ invoice: initial }: { invoice: InvoiceData }) {
         body: JSON.stringify({ action: 'mark_paid', paidNote }),
       })
       if (!res.ok) throw new Error((await res.json()).error)
-      setInvoice(await res.json())
+      const updated = await res.json()
+      log.info('invoice marked as paid', { invoiceId: invoice.id })
+      setInvoice(updated)
       setMarkPaidDialogOpen(false)
       toast.success('Invoice marked as paid')
     } catch (err) {
+      log.error('mark paid failed', err)
       toast.error(err instanceof Error ? err.message : 'Failed to mark paid')
     } finally {
       setMarkingPaid(false)

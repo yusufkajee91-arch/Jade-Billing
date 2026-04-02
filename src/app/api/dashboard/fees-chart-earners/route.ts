@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { apiLogger } from '@/lib/debug'
+
+const log = apiLogger('dashboard/fees-chart-earners')
 
 const EARNER_COLORS = [
   'hsl(10 22% 60%)',
@@ -17,9 +20,16 @@ const EARNER_COLORS = [
 // GET /api/dashboard/fees-chart-earners — admin only
 // Returns per-earner daily cumulative fee data for the current month.
 export async function GET() {
+  log.info('GET request received')
   const session = await getServerSession(authOptions)
-  if (!session) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
-  if (session.user.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!session) {
+    log.warn('GET rejected: unauthorised')
+    return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  }
+  if (session.user.role !== 'admin') {
+    log.warn('GET rejected: forbidden', { role: session.user.role })
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const now = new Date()
   const year = now.getFullYear()
@@ -76,6 +86,8 @@ export async function GET() {
       data.push(point)
     }
 
+    log.debug('Fees chart earners data:', { earnerCount: activeEarners.length, dataPoints: data.length })
+    log.info('GET completed successfully')
     return NextResponse.json({
       earners: activeEarners.map((e, i) => ({
         id: e.id,
@@ -90,9 +102,9 @@ export async function GET() {
       currentMonthName: currentStart.toLocaleString('en-ZA', { month: 'long', timeZone: 'UTC' }),
     })
   } catch (err) {
-    console.error('[GET /api/dashboard/fees-chart-earners]', err)
+    log.error('GET failed:', err)
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : String(err) },
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined } : undefined },
       { status: 500 },
     )
   }

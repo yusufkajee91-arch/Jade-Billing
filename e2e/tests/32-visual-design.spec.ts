@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/console-capture'
 
 test.describe('US-032: Visual Design / Brand', () => {
   test('page background matches brand (#F1EDEA area)', async ({ page }) => {

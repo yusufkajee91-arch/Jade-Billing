@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from '../helpers/console-capture'
 
 test.describe('Authentication and App Scaffold', () => {
   test.describe('Login page', () => {

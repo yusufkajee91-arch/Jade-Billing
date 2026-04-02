@@ -3,6 +3,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { apiLogger } from '@/lib/debug'
+
+const log = apiLogger('firm-settings')
 
 const firmSettingsSchema = z.object({
   firmName: z.string().min(1, 'Firm name is required'),
@@ -48,30 +51,46 @@ const firmSettingsSchema = z.object({
 })
 
 export async function GET() {
+  log.info('GET request received')
   const session = await getServerSession(authOptions)
   if (!session) {
+    log.warn('GET unauthorised — no session')
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
 
-  const settings = await prisma.firmSettings.findFirst({
-    include: { offices: { orderBy: { sortOrder: 'asc' } } },
-  })
+  try {
+    const settings = await prisma.firmSettings.findFirst({
+      include: { offices: { orderBy: { sortOrder: 'asc' } } },
+    })
 
-  return NextResponse.json(settings)
+    log.info('GET completed successfully')
+    return NextResponse.json(settings)
+  } catch (err) {
+    log.error('GET failed:', err)
+    return NextResponse.json(
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined } : undefined },
+      { status: 500 },
+    )
+  }
 }
 
 export async function PUT(request: NextRequest) {
+  log.info('PUT request received')
   const session = await getServerSession(authOptions)
   if (!session) {
+    log.warn('PUT unauthorised — no session')
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
   if (session.user.role !== 'admin') {
+    log.warn('PUT forbidden — role:', session.user.role)
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   const body = await request.json()
+  log.debug('PUT body:', { ...body, smtpPassword: body.smtpPassword ? '[REDACTED]' : undefined })
   const parsed = firmSettingsSchema.safeParse(body)
   if (!parsed.success) {
+    log.warn('PUT validation failed:', parsed.error.flatten())
     return NextResponse.json(
       { error: 'Validation failed', details: parsed.error.flatten() },
       { status: 400 },
@@ -80,60 +99,71 @@ export async function PUT(request: NextRequest) {
 
   const { office, ...settingsData } = parsed.data
 
-  const existing = await prisma.firmSettings.findFirst()
+  try {
+    const existing = await prisma.firmSettings.findFirst()
 
-  let settings
-  if (existing) {
-    settings = await prisma.firmSettings.update({
-      where: { id: existing.id },
-      data: settingsData,
-      include: { offices: true },
-    })
-
-    // Update primary office
-    if (office) {
-      const primaryOffice = await prisma.firmOffice.findFirst({
-        where: { firmSettingsId: existing.id, isPrimary: true },
+    let settings
+    if (existing) {
+      log.debug('PUT updating existing firm settings:', existing.id)
+      settings = await prisma.firmSettings.update({
+        where: { id: existing.id },
+        data: settingsData,
+        include: { offices: true },
       })
-      if (primaryOffice) {
-        await prisma.firmOffice.update({
-          where: { id: primaryOffice.id },
-          data: office,
+
+      // Update primary office
+      if (office) {
+        const primaryOffice = await prisma.firmOffice.findFirst({
+          where: { firmSettingsId: existing.id, isPrimary: true },
         })
-      } else {
-        await prisma.firmOffice.create({
-          data: {
-            firmSettingsId: existing.id,
-            label: 'Main Office',
-            isPrimary: true,
-            ...office,
-          },
-        })
+        if (primaryOffice) {
+          await prisma.firmOffice.update({
+            where: { id: primaryOffice.id },
+            data: office,
+          })
+        } else {
+          await prisma.firmOffice.create({
+            data: {
+              firmSettingsId: existing.id,
+              label: 'Main Office',
+              isPrimary: true,
+              ...office,
+            },
+          })
+        }
       }
+    } else {
+      log.debug('PUT creating new firm settings')
+      settings = await prisma.firmSettings.create({
+        data: {
+          ...settingsData,
+          offices: office
+            ? {
+                create: {
+                  label: 'Main Office',
+                  isPrimary: true,
+                  ...office,
+                },
+              }
+            : undefined,
+        },
+        include: { offices: true },
+      })
     }
-  } else {
-    settings = await prisma.firmSettings.create({
-      data: {
-        ...settingsData,
-        offices: office
-          ? {
-              create: {
-                label: 'Main Office',
-                isPrimary: true,
-                ...office,
-              },
-            }
-          : undefined,
-      },
-      include: { offices: true },
+
+    // Refetch with updated offices
+    const updated = await prisma.firmSettings.findUnique({
+      where: { id: settings.id },
+      include: { offices: { orderBy: { sortOrder: 'asc' } } },
     })
+
+    log.info('PUT completed successfully')
+    return NextResponse.json(updated)
+  } catch (err) {
+    log.error('PUT failed:', err)
+    return NextResponse.json(
+      { error: 'Internal server error', debug: process.env.NODE_ENV !== 'production' ? { message: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined } : undefined },
+      { status: 500 },
+    )
   }
-
-  // Refetch with updated offices
-  const updated = await prisma.firmSettings.findUnique({
-    where: { id: settings.id },
-    include: { offices: { orderBy: { sortOrder: 'asc' } } },
-  })
-
-  return NextResponse.json(updated)
 }
