@@ -191,7 +191,7 @@ export function FeeEntryForm({
     log.info('Loading lookup data for fee entry form')
     Promise.all([
       fetch('/api/matters?active=true').then((r) => { log.debug('Matters response status:', r.status); return r.json() }),
-      fetch('/api/users').then((r) => { log.debug('Users response status:', r.status); return r.json() }),
+      fetch('/api/lookup?type=users').then((r) => { log.debug('Users response status:', r.status); return r.json() }),
       fetch('/api/lookup?type=fee_levels').then((r) => { log.debug('Fee levels response status:', r.status); return r.json() }),
       fetch('/api/lookup?type=posting_codes').then((r) => { log.debug('Posting codes response status:', r.status); return r.json() }),
       fetch('/api/firm-settings').then((r) => { log.debug('Firm settings response status:', r.status); return r.json() }),
@@ -204,7 +204,7 @@ export function FeeEntryForm({
         billingBlocksEnabled: firmData?.billingBlocksEnabled,
       })
       setMatters(mattersData?.matters ?? mattersData ?? [])
-      setUsers(usersData?.users ?? usersData ?? [])
+      setUsers(Array.isArray(usersData) ? usersData : [])
       setFeeLevels(feeLevelsData ?? [])
       setPostingCodes(postingCodesData ?? [])
       setBillingBlocksEnabled(firmData?.billingBlocksEnabled ?? true)
