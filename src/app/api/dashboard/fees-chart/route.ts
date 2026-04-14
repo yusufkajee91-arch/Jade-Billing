@@ -58,13 +58,15 @@ export async function GET(request: NextRequest) {
       monthlyTargetCents = me?.monthlyTargetCents ?? null
     }
 
+    const billableFilter = { isBillable: true, entryType: { not: 'disbursement' as const } }
+
     const [currentEntries, prevEntries] = await Promise.all([
       prisma.feeEntry.findMany({
-        where: { ...earnerFilter, entryDate: { gte: currentStart, lte: currentEnd } },
+        where: { ...earnerFilter, ...billableFilter, entryDate: { gte: currentStart, lte: currentEnd } },
         select: { entryDate: true, totalCents: true },
       }),
       prisma.feeEntry.findMany({
-        where: { ...earnerFilter, entryDate: { gte: prevStart, lte: prevEnd } },
+        where: { ...earnerFilter, ...billableFilter, entryDate: { gte: prevStart, lte: prevEnd } },
         select: { entryDate: true, totalCents: true },
       }),
     ])

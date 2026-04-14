@@ -48,7 +48,11 @@ export async function GET() {
         orderBy: { initials: 'asc' },
       }),
       prisma.feeEntry.findMany({
-        where: { entryDate: { gte: currentStart, lte: currentEnd } },
+        where: {
+          entryDate: { gte: currentStart, lte: currentEnd },
+          isBillable: true,
+          entryType: { not: 'disbursement' as const },
+        },
         select: { feeEarnerId: true, entryDate: true, totalCents: true },
       }),
     ])
