@@ -178,6 +178,11 @@ export default function ClientDetailPage() {
   }
 
   const handleFileUpload = async (file: File) => {
+    const MAX_SIZE = 50 * 1024 * 1024 // 50 MB
+    if (file.size > MAX_SIZE) {
+      toast.error('File is too large. Maximum size is 50 MB.')
+      return
+    }
     setUploading(true)
     try {
       const formData = new FormData()
@@ -188,13 +193,18 @@ export default function ClientDetailPage() {
         method: 'POST',
         body: formData,
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || 'Upload failed')
+      }
       toast.success('Document uploaded successfully')
+      setUploadNotes('')
       fetchClient()
-    } catch {
-      toast.error('Failed to upload document')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload document')
     } finally {
       setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
     }
   }
 
@@ -634,6 +644,7 @@ export default function ClientDetailPage() {
                 <input
                   ref={fileInputRef}
                   type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx"
                   style={{ display: 'none' }}
                   onChange={(e) => {
                     const file = e.target.files?.[0]

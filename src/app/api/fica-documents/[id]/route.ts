@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { readFile, unlink, rmdir } from 'fs/promises'
-import path from 'path'
+import { supabaseAdmin, FICA_BUCKET } from '@/lib/supabase-storage'
 import { apiLogger } from '@/lib/debug'
 
 const log = apiLogger('fica-documents/[id]')
@@ -31,14 +30,17 @@ export async function GET(
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
-    log.debug('GET reading file:', doc.filePath)
-    let buffer: Buffer
-    try {
-      buffer = await readFile(doc.filePath)
-    } catch {
-      log.warn('GET file not found on disk:', doc.filePath)
+    log.debug('GET downloading from Supabase:', doc.filePath)
+    const { data, error } = await supabaseAdmin.storage
+      .from(FICA_BUCKET)
+      .download(doc.filePath)
+
+    if (error || !data) {
+      log.warn('GET file not found in Supabase Storage:', doc.filePath, error)
       return NextResponse.json({ error: 'File not found on server' }, { status: 404 })
     }
+
+    const buffer = Buffer.from(await data.arrayBuffer())
 
     log.info('GET completed successfully — serving file:', doc.fileName, `(${buffer.length} bytes)`)
     return new NextResponse(new Uint8Array(buffer), {
@@ -84,9 +86,14 @@ export async function DELETE(
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
-    // Remove file from filesystem (best-effort)
-    try { await unlink(doc.filePath) } catch { /* already gone */ }
-    try { await rmdir(path.dirname(doc.filePath)) } catch { /* not empty or gone */ }
+    // Remove file from Supabase Storage (best-effort)
+    const { error: removeError } = await supabaseAdmin.storage
+      .from(FICA_BUCKET)
+      .remove([doc.filePath])
+
+    if (removeError) {
+      log.warn('DELETE failed to remove file from storage:', removeError)
+    }
 
     await prisma.ficaDocument.delete({ where: { id } })
 

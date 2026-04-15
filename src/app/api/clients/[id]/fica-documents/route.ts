@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { writeFile, mkdir } from 'fs/promises'
-import path from 'path'
+import { supabaseAdmin, FICA_BUCKET } from '@/lib/supabase-storage'
 import { apiLogger } from '@/lib/debug'
 
 const log = apiLogger('clients/[id]/fica-documents')
@@ -79,23 +78,50 @@ export async function POST(
       )
     }
 
-    const uploadDir = path.join(process.cwd(), 'uploads', 'fica', id)
-    await mkdir(uploadDir, { recursive: true })
-
+    // Upload to Supabase Storage
     const buffer = Buffer.from(await file.arrayBuffer())
-    const fileName = file.name
-    const filePath = path.join(uploadDir, fileName)
-    await writeFile(filePath, buffer)
-    log.debug('POST file written to:', filePath)
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+    const storagePath = `${id}/${Date.now()}-${safeName}`
+
+    // Infer MIME type from extension when browser doesn't provide one
+    const mimeFromExt: Record<string, string> = {
+      '.pdf': 'application/pdf',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.doc': 'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    }
+    const ext = file.name.toLowerCase().match(/\.[^.]+$/)?.[0] ?? ''
+    const contentType = file.type || mimeFromExt[ext] || 'application/pdf'
+
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(FICA_BUCKET)
+      .upload(storagePath, buffer, {
+        contentType,
+        upsert: false,
+      })
+
+    if (uploadError) {
+      log.error('POST Supabase upload failed:', uploadError)
+      return NextResponse.json(
+        { error: 'Failed to upload file', debug: process.env.NODE_ENV !== 'production' ? { message: uploadError.message } : undefined },
+        { status: 500 },
+      )
+    }
+
+    log.debug('POST file uploaded to Supabase:', storagePath)
 
     const doc = await prisma.ficaDocument.create({
       data: {
         clientId: id,
         documentType,
-        fileName,
-        filePath: filePath,
+        fileName: file.name,
+        filePath: storagePath,
         fileSizeBytes: file.size,
-        mimeType: file.type || null,
+        mimeType: contentType,
         notes: notes || null,
         uploadedById: session.user.id,
       },
