@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiLogger } from '@/lib/debug'
+import { getWorkingDaysInMonth, cumulativeWorkingDays } from '@/lib/working-days'
 
 const log = apiLogger('dashboard/fees-chart')
 
@@ -84,8 +85,11 @@ export async function GET(request: NextRequest) {
     const currMap = byDay(currentEntries)
     const prevMap = byDay(prevEntries)
 
-    // Daily target = monthly target spread evenly across the month's days
-    const dailyTargetCents = monthlyTargetCents != null ? monthlyTargetCents / daysInCurrent : null
+    // Daily target spread across working days (excl. weekends + SA public holidays)
+    const workingDays = getWorkingDaysInMonth(year, month)
+    const dailyTargetCents = monthlyTargetCents != null && workingDays > 0
+      ? monthlyTargetCents / workingDays
+      : null
 
     type DayData = { day: number; current: number; previous: number; target?: number }
     const data: DayData[] = []
@@ -101,8 +105,9 @@ export async function GET(request: NextRequest) {
         current: d <= today && d <= daysInCurrent ? currCum : 0,
         previous: d <= daysInPrev ? prevCum : 0,
       }
-      if (dailyTargetCents != null) {
-        point.target = Math.round(dailyTargetCents * d)
+      if (dailyTargetCents != null && d <= daysInCurrent) {
+        const wd = cumulativeWorkingDays(year, month, d)
+        point.target = Math.round(dailyTargetCents * wd)
       }
       data.push(point)
     }

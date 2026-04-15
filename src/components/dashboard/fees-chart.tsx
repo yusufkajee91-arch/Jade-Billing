@@ -161,8 +161,11 @@ export function FeesChart({
     }
   }, [])
 
+  const maxDay = chart
+    ? chart.data[chart.data.length - 1]?.day ?? chart.daysInCurrentMonth
+    : 31
   const xTicks = chart
-    ? [1, 5, 10, 15, 20, 25, chart.daysInCurrentMonth].filter((d, i, arr) => arr.indexOf(d) === i)
+    ? [1, 5, 10, 15, 20, 25, maxDay].filter((d, i, arr) => arr.indexOf(d) === i)
     : [1, 5, 10, 15, 20, 25, 31]
 
   const header = (
