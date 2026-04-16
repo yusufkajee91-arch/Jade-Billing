@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { supabaseAdmin, FICA_BUCKET } from '@/lib/supabase-storage'
+import { getSupabaseAdmin, FICA_BUCKET } from '@/lib/supabase-storage'
 import { apiLogger } from '@/lib/debug'
 
 const log = apiLogger('fica-documents/[id]')
@@ -31,6 +31,7 @@ export async function GET(
     }
 
     log.debug('GET downloading from Supabase:', doc.filePath)
+    const supabaseAdmin = getSupabaseAdmin()
     const { data, error } = await supabaseAdmin.storage
       .from(FICA_BUCKET)
       .download(doc.filePath)
@@ -87,6 +88,7 @@ export async function DELETE(
     }
 
     // Remove file from Supabase Storage (best-effort)
+    const supabaseAdmin = getSupabaseAdmin()
     const { error: removeError } = await supabaseAdmin.storage
       .from(FICA_BUCKET)
       .remove([doc.filePath])
