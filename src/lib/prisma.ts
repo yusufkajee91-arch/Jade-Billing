@@ -6,7 +6,7 @@ const log = libLogger('prisma')
 
 // Increment this when the Prisma schema changes (after running npx prisma generate).
 // This busts the globalThis cache so the dev server picks up the new generated client.
-const PRISMA_SCHEMA_VERSION = 9 // Phase 9: billing_status enum + practice notes fields on Matter
+const PRISMA_SCHEMA_VERSION = 10 // Phase 10: LP-parity — 10 new tables + LP fields on clients/matters/fee_entries/posting_codes/suppliers/invoices/gl_accounts
 
 function createPrismaClient() {
   const connectionString = process.env.DATABASE_URL

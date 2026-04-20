@@ -1,0 +1,1543 @@
+
+<!DOCTYPE html><html lang="en" class="js legal">
+<head>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>
+    Create a .zip of PDF invoices
+</title>
+<link rel="shortcut icon" href="/static/images/lpfavicon.ico" type="image/x-icon">
+<!-- Vendor CSS -->
+<link href="/static/material-admin/vendors/bower_components/animate.css/animate.min.css" rel="stylesheet">
+<link href="/static/material-admin/vendors/bower_components/sweetalert2/dist/sweetalert2.min.css" rel="stylesheet">
+<link href="/static/material-admin/vendors/bower_components/material-design-iconic-font/dist/css/material-design-iconic-font.min.css" rel="stylesheet">
+<link href="/static/material-admin/vendors/bower_components/malihu-custom-scrollbar-plugin/jquery.mCustomScrollbar.min.css" rel="stylesheet">
+<link href="/static/node_modules/datatables.net-dt/css/jquery.dataTables.min.css" rel="stylesheet">
+
+<link href="/static/dataTables.responsive.bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="/static/node_modules/datatables.net-responsive-dt/css/responsive.dataTables.min.css">
+
+<!-- CSS -->
+
+
+<script src="/static/material-admin/vendors/bower_components/jquery/dist/jquery.min.js"></script>
+<script src="/static/material-admin/vendors/bower_components/bootstrap/dist/js/bootstrap.min.js"></script>
+<link rel="stylesheet" href="/doya/web/static/ace/assets/css/font-awesome.min.css" />
+<link rel="stylesheet" href="/static/material-admin/vendors/bower_components/font-awesome/css/font-awesome.min.css" />
+<link href="/static/node_modules/selectize/dist/css/selectize.bootstrap3.css" rel="stylesheet" />
+<script src="/static/node_modules/selectize/dist/js/standalone/selectize.min.js"></script>
+<script src="/static/node_modules/html2canvas/dist/html2canvas.min.js"></script>
+<script src="/static/node_modules/round-half-even/dist/round-half-even.min.js"></script>
+<script src="/static/material-admin/vendors/bower_components/malihu-custom-scrollbar-plugin/jquery.mCustomScrollbar.concat.min.js"></script>
+<script src="/static/material-admin/vendors/bower_components/Waves/dist/waves.min.js"></script>
+<script src="/static/material-admin/vendors/bootstrap-growl/bootstrap-growl.min.js"></script>
+<script src="/static/material-admin/vendors/bower_components/sweetalert2/dist/sweetalert2.min.js"></script>
+<script src="/static/node_modules/datatables.net/js/jquery.dataTables.min.js"></script>
+<script src="/static/node_modules/datatables.net-responsive/js/dataTables.responsive.min.js"></script>
+
+<script src="/static/moment.min.js"></script>
+<script src="/static/node_modules/centrifuge/dist/centrifuge.js"></script>
+<script src="/static/node_modules/htmx.org/dist/htmx.min.js"></script>
+<script src="/static/numeral/numeral.min.js"></script>
+<script src="/static/material-admin/vendors/bower_components/lightgallery/dist/js/lightgallery.js"></script>
+<script src="/static/checkbox-drag-select.js"></script>
+<!-- <script
+  src="https://browser.sentry-cdn.com/7.101.1/bundle.replay.min.js"
+  integrity="sha384-Jgn+Vbd0OuCPajxeuSofsgzgZIXa8t49ShrEOpztmc0lPecvD+Ra3t4pzXEWP5kb"
+  crossorigin="anonymous"
+></script>
+<script>
+Sentry.init({
+    dsn: "https://98f28891bd2f4f3c95acb5530590ffef@o445799.ingest.sentry.io/5423053",
+    replaysSessionSampleRate: 0.1,
+    replaysOnErrorSampleRate: 1.0,
+    integrations: [
+      Sentry.replayIntegration({
+        maskAllText: true,
+        blockAllMedia: true,
+      }),
+    ],
+  });
+</script> -->
+
+<script>
+    class SessionWrapper {
+        constructor() {
+            // Initialize Centrifugo client
+            this.centrifuge = new Centrifuge("/connection/websocket", {
+                //token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM3MjIiLCJpYXQiOjE3MzcyMTQwMjZ9.4l4ij96oghuGgh9qghq9GgOWpsGyra4PEyWFtmwcbSQ"
+                token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM3MjIiLCJpYXQiOjE3MzcyMjE1OTF9.b5wxWrYNzH_VBO3fbrtP950706AnsxC1yKHJp4FJ1PE"
+            });
+            this.centrifuge
+                .on('connecting', function (ctx) {
+                    // console.log('connecting:', ctx.code, ctx.reason);
+                })
+                .on('connected', function (ctx) {
+                    // console.log('connected over', ctx.transport);
+                    
+
+//session.subscribe("testtopic.adasd.asdasd.", function() { alert("Hello"); });
+
+session.subscribe("dci.issue.for.LGN_SYS_1_2233138458943", function() {
+    getjustissues();
+    getissuecount();
+});
+session.subscribe("dci.hidereversals.LGN_SYS_1_2233138458943", function(msg) {
+    $("#hidereversals").data('hidereversals', msg == "1");
+    if (msg == "1") {
+        $("#hidereversals").html('Reversals Hidden');
+    } else {
+        $("#hidereversals").html('Reversals Shown');
+    }
+    //Now redraw all datatables
+    $("table.datatable:visible").each(function () {
+        $(this).DataTable().draw();
+    });
+    $("table.report:visible").each(function () {
+        $(this).DataTable().draw();
+    });
+});
+session.subscribe("dci.freezedate.LGN_SYS_1_2233138458943", function(msg) {
+    getfreezedate();
+});
+session.subscribe("dci.doyajob", function(_) {
+    doyajobcount_update();
+    $(".reload_button_doyajob").show(1000);
+});
+session.subscribe("dci.emailsend", function(_) {
+    doyajobcount_update();
+    $(".reload_button_doyajob").show(1000);
+});
+;
+                })
+                .on('disconnected', function (ctx) {
+                    // console.log('disconnected:', ctx.code, ctx.reason);
+                })
+                .connect();
+            this.subscriptions = new Map();
+        }
+
+        publish(channel, data) {
+            let subInfo = this.subscriptions.get(channel);
+            if (!subInfo) {
+                const sub = this.centrifuge.newSubscription(channel);
+                subInfo = { sub, callbacks: new Set() };
+                this.subscriptions.set(channel, subInfo);
+            }
+            subInfo.sub.publish(data);
+        }
+
+        subscribe(channel, callback) {
+            let subInfo = this.subscriptions.get(channel);
+            
+            if (!subInfo) {
+                // Create new subscription if it doesn't exist
+                const sub = this.centrifuge.newSubscription(channel);
+                subInfo = { sub, callbacks: new Set() };
+                this.subscriptions.set(channel, subInfo);
+                
+                // Set up the subscription handlers
+                sub.on('publication', function(ctx) {
+                    // Call all registered callbacks with the data
+                    // console.log("Calling callbacks: ", subInfo.callbacks.size)
+                    subInfo.callbacks.forEach(cb => {
+                        try {
+                            // console.log("Calling callback.")
+                            cb(ctx.data);
+                        } catch (e) {
+                            console.error('Error in subscription callback:', e);
+                        }
+                    });
+                });
+
+                sub.on('subscribing', function (ctx) {
+                    // console.log('subscribing:', ctx.code, ctx.reason);
+                });
+                
+                sub.on('subscribed', function (ctx) {
+                    // console.log('subscribed', ctx);
+                });
+                
+                sub.on('unsubscribed', function (ctx) {
+                    // console.log('unsubscribed:', ctx.code, ctx.reason);
+                });
+
+                // Actually subscribe
+                sub.subscribe();
+            }
+
+            // Add the new callback to the set
+            // console.log("Adding callback.")
+            subInfo.callbacks.add(callback);
+            // console.log("This has now", subInfo.callbacks.size, "callbacks.")
+        
+            return subInfo.sub;
+        }
+    }
+    const session = new SessionWrapper();
+
+</script>
+<!-- Autobahns here. -->
+
+<!-- Placeholder for IE9 -->
+<!--[if IE 9 ]>
+    <script src="/static/material-admin/vendors/bower_components/jquery-placeholder/jquery.placeholder.min.js"></script>
+<![endif]-->
+
+<script>
+function fixrequired() {
+	$(".requiredwrapped").unwrap();
+	$(".requiredwrapped").removeClass("requiredwrapped");
+
+	$(".required").parent().wrap('<div class="requiredwrap" />');
+	$(".required").parent().addClass("requiredwrapped");
+}
+</script>
+
+<script src="/doya/web/static/jquery-ui-interactions/jquery-ui.min.js"></script>
+<link rel="stylesheet" href="/doya/web/static/jquery-ui-interactions/jquery-ui.min.css" />
+<script src="/static/node_modules/jquery-validation/dist/jquery.validate.min.js"></script>
+<script src="/static/node_modules/jquery-validation/dist/additional-methods.min.js"></script>
+<script src="/static/jquery.inputmask.bundle.js"></script>
+<script type="text/javascript" src="/doya/web/static/jquery-plugins/form/jquery.form.js"></script>
+<script src="/static/material-admin/vendors/bower_components/moment/min/moment.min.js"></script>
+<script src="/static/material-admin/vendors/bower_components/bootstrap-select/dist/js/bootstrap-select.js"></script>
+<script src="/static/material-admin/vendors/bower_components/nouislider/distribute/nouislider.min.js"></script>
+<script src="/static/material-admin/vendors/bower_components/eonasdan-bootstrap-datetimepicker/build/js/bootstrap-datetimepicker.min.js"></script>
+<script src="/static/material-admin/vendors/bower_components/typeahead.js/dist/typeahead.bundle.min.js"></script>
+<script src="/static/dropzone/dropzone.min.js"></script>
+<script src="/static/summernote/summernote.js"></script>
+<script src="/static/summernote-image-attributes.js"></script>
+<script src="/static/material-admin/vendors/bower_components/autosize/dist/autosize.min.js"></script>
+<script src="/static/material-admin/vendors/bower_components/jquery-mask-plugin/dist/jquery.mask.min.js"></script>
+<script src="/static/jquery-ui-custom-sortable.js"></script>
+<script src="/static/material-admin/vendors/bower_components/jquery-placeholder/jquery.placeholder.min.js"></script>
+<script src="/static/material-admin/vendors/bower_components/chosen/chosen.jquery.js"></script>
+<script src="/static/material-admin/vendors/fileinput/fileinput.min.js"></script>
+<script src="/static/material-admin/vendors/farbtastic/farbtastic.min.js"></script>
+<script src="/static/node_modules/intl-tel-input/build/js/intlTelInput.min.js"></script>
+<script>
+jQuery(document).ready(function($) {
+   $('[data-rel=popover]').popover({html:true});
+});
+</script>
+<script src="/doya/web/static/formJSON.js?2024-09-17T15:19:49.121154"></script>
+
+<link href="/static/material-admin/vendors/bower_components/material-design-iconic-font/dist/css/material-design-iconic-font.min.css" rel="stylesheet">
+<link href="/static/material-admin/vendors/bower_components/malihu-custom-scrollbar-plugin/jquery.mCustomScrollbar.min.css" rel="stylesheet">
+<link href="/static/material-admin/vendors/bower_components/bootstrap-select/dist/css/bootstrap-select.css" rel="stylesheet">
+<link href="/static/material-admin/vendors/bower_components/nouislider/distribute/nouislider.min.css" rel="stylesheet">
+<link href="/static/material-admin/vendors/bower_components/eonasdan-bootstrap-datetimepicker/build/css/bootstrap-datetimepicker.min.css" rel="stylesheet">
+<link href="/static/node_modules/dropzone/dist/dropzone.css" rel="stylesheet" type="text/css">
+<link href="/static/material-admin/vendors/farbtastic/farbtastic.css" rel="stylesheet">
+<link href="/static/material-admin/vendors/bower_components/chosen/chosen.css" rel="stylesheet">
+<link href="/static/summernote/summernote.css" rel="stylesheet">
+<link href="/static/jquery-ui-custom-sortable.css" rel="stylesheet" />
+<link rel="stylesheet" href="/static/node_modules/intl-tel-input/build/css/intlTelInput.min.css">
+
+
+<link href="/static/material-admin/css/app_1.min.css" rel="stylesheet">
+<link href="/static/material-admin/css/app_2.min.css" rel="stylesheet">
+<link rel="stylesheet" href="/doya/web/static/doya.css?_=202410021629" />
+<body>
+
+
+<script src="/static/keymaster.js"></script>
+<script>
+key.filter = function(event) {
+    var t = $(event.target);
+    if (t.is(':input, [contenteditable]')) return false;
+    return true;
+}
+key('/', function(evt) {
+    evt.stopPropagation();
+    $('#header').addClass('search-toggled');
+    $('#top-search-wrap input').focus();
+    window.setTimeout(function() { 
+        $('#top-search-wrap input').val('').trigger('keyup');
+    }, 100);
+});
+key('\\', function(evt) {
+    evt.stopPropagation();
+    $('#menusearch').focus();
+    window.setTimeout(function() {
+        $('#menusearch').val('');
+    });
+});
+</script>
+<header id="header" class="clearfix" data-ma-theme="teal">
+    <ul class="h-inner">
+        <li class="hi-trigger ma-trigger" data-ma-action="sidebar-open" data-ma-target="#sidebar">
+            <div class="line-wrap">
+                <div class="line top"></div>
+                <div class="line center"></div>
+                <div class="line bottom"></div>
+            </div>
+        </li>
+
+        <li class="hi-logo hidden-xs">
+            <a href="/"><img border="0" alt="LawPracticeZA" src="/static/lawpza2_300.png" /></a>
+        </li>
+
+        <li class="pull-right">
+            <ul class="hi-menu">
+                <li data-ma-action="search-open">
+                    <a href=""><i class="him-icon zmdi zmdi-search"></i></a>
+                </li>
+                <li><a title="Add New Client" href="/customer/insert"><i class="him-icon zmdi zmdi-account-add"></i></a></li>
+                <li><a title="Add New Matter" href="/matter/insert"><i class="him-icon zmdi zmdi-case"></i></a></li>
+
+
+                <li class="dropdown">
+                    <a href="/doyajob/current" title="Background Tasks">
+                        <i class="him-icon zmdi zmdi-view-list-alt"></i>
+                        <i class="him-counts" id="doyajobcount">&#8987;</i>
+                    </a>
+                </li>
+                <script>
+                    function doyajobcount_update() {
+                        $.ajax({
+                            global: false,
+                            url: "/api/doyajob/count",
+                            type: 'GET',
+                            error: function() {
+                                $("#doyajobcount").html("&#9888;"); // Warning sign.
+                            },
+                            success: function(r) {
+                                if (r.pending + r.bad) {
+                                    $("#doyajobcount").html(r.pending + r.bad);
+                                    $("#doyajobcount").show(30);
+                                    if (r.bad) {
+                                        $("#doyajobcount").css('background-color', 'red');
+                                    } else {
+                                        $("#doyajobcount").css('background-color', 'green');
+                                    }
+                                }
+                                else {
+                                    $("#doyajobcount").hide(30);
+                                }
+                            }
+                        });
+                    }
+                    $(document).ready(function() {
+                        doyajobcount_update();
+                    });
+                </script>
+                
+                <li id="issueh" class="dropdown">
+                    <a data-toggle="dropdown" href="" title="Open Issues">
+                        <i class="him-icon zmdi zmdi-email"></i>
+                        <i class="him-counts issuecount">&#8987;</i>
+                    </a>
+                    <div class="dropdown-menu dropdown-menu-lg pull-right">
+                        <div class="list-group">
+                            <div class="lg-header">
+                                Issues
+                                <a href="/issue/next" title="Next issue..." class="btn-xs btn btn-default pull-right"><i class="fa fa-arrow-right"></i></a>
+                            </div>
+                            <div class="lg-body justissues">
+
+                            </div>
+                            <a class="view-more col-xs-6" href="/dashboard/myissues">View All</a>
+                            <a class="view-more col-xs-6" href="/issue/insert">Add Issue</a>
+                        </div>
+                    </div>
+                </li>
+                <li class="dropdown">
+                    <a data-toggle="dropdown" href="" title="Notices">
+                        <i class="him-icon zmdi zmdi-notifications"></i>
+                    </a>
+
+                    <div class="dropdown-menu dropdown-menu-lg pull-right">
+                        <div class="list-group him-notification">
+                            <div class="lg-header">
+                                Notices
+                            </div>
+                            <div class="lg-body">
+                            </div>
+                            <a class="view-more col-xs-6" href="/notice/list">All Notices</a>
+                            <a class="view-more col-xs-6" href="/notice/insert">Add Notice</a>
+                        </div>
+                    </div>
+                </li>
+                <!-- <li class="dropdown">
+                    <a data-toggle="dropdown" href=""><i class="him-icon zmdi zmdi-more-vert"></i></a>
+                    <ul class="dropdown-menu dm-icon pull-right">
+                        <li class="skin-switch hidden-xs">
+                            <span class="ss-skin bgm-lightblue" data-ma-action="change-skin" data-ma-skin="lightblue"></span>
+                            <span class="ss-skin bgm-bluegray" data-ma-action="change-skin" data-ma-skin="bluegray"></span>
+                            <span class="ss-skin bgm-cyan" data-ma-action="change-skin" data-ma-skin="cyan"></span>
+                            <span class="ss-skin bgm-teal" data-ma-action="change-skin" data-ma-skin="teal"></span>
+                            <span class="ss-skin bgm-orange" data-ma-action="change-skin" data-ma-skin="orange"></span>
+                            <span class="ss-skin bgm-blue" data-ma-action="change-skin" data-sma-kin="blue"></span>
+                        </li>
+                        <li class="divider hidden-xs"></li>
+                        <li class="hidden-xs">
+                            <a data-ma-action="fullscreen" href=""><i class="zmdi zmdi-fullscreen"></i> Toggle Fullscreen</a>
+                        </li>
+                        <li>
+                            <a data-ma-action="clear-localstorage" href=""><i class="zmdi zmdi-delete"></i> Clear Local Storage</a>
+                        </li>
+                        <li>
+                            <a href=""><i class="zmdi zmdi-face"></i> Privacy Settings</a>
+                        </li>
+                        <li>
+                            <a href=""><i class="zmdi zmdi-settings"></i> Other Settings</a>
+                        </li>
+                    </ul>
+                </li> -->
+                <li style="display: none" class="ma-trigger rightpanel-button" data-ma-action="sidebar-open" data-ma-target="#rightpanel">
+                    <a href=""><i class="him-icon zmdi zmdi-comment-alt-text"></i></a>
+                </li>
+            </ul>
+        </li>
+    </ul>
+
+    <!-- Top Search Content -->
+    <div id="top-search-wrap" class="h-search-wrap">
+        <div class="hsw-inner">
+            <select tabindex="1" id="headersearch"></select>
+        </div>
+    </div>
+</header>
+<script>
+var matter_lookup = 0;
+omap = {
+    'invoice': 'salesinvoice',
+    'inv': 'salesinvoice',
+    'creditnote': 'salescreditnote',
+    'credit': 'salescreditnote',
+    'purchase': 'purchaseinvoice',
+    'receipt': 'customerpayment',
+    'client': 'customer',
+    'customer': 'customer',
+    'payment': 'matterpayment',
+    'supplier': 'supplier',
+    'producer': 'producer',
+    'show': 'show',
+    'performance': 'performance',
+    'press': 'mediamention',
+    'order': 'purchaseorder',
+    'stock': 'stockitem',
+    'list': 'mailinglist',
+    'subscriber': 'mailinglistsubscriber',
+    'send': 'mailinglistsend',
+    'account': 'account',
+    'acc': 'account',
+    'bankstatement': 'bankstatement',
+    'staff': 'staff',
+    'shift': 'shift',
+    'feedback': 'showfeedback',
+    'issue': 'issue',
+    'salesagent': 'salesagent',
+    'feeearner': 'salesagent',
+    'ticket': 'ticket',
+    'table': 'opentable',
+    'matter': 'matter',
+    'project': 'matter',
+    'subscription': 'subscription',
+    'schedule': 'schedule',
+    'trustreceipt': 'trustreceipt',
+    'trusttransfer': 'trusttransfer',
+    'collection': 'collection',
+    'debtor': 'collection',
+}
+
+var recents = JSON.parse(localStorage.getItem('recentheadersearches_dci')||'[]');
+if (recents.length) {
+    recents.push({"uid": "_clear", "name": 'Clear cached search results'});
+}
+var select_fields = $('#headersearch').selectize({inputClass: 'form-control selectize-input',
+    options: recents,
+    valueField: 'uid',
+    labelField: 'name',
+    searchField: 'name',
+    placeholder: 'Search for matter... or ? for help on other searches',
+    loadingClass: 'header-search-loading',
+    loadThrottle: 300,
+    score: function() { return function() { return 1; }; }, //show all results
+    load: function(query, callback) {
+        if (query == '?') {
+            $('#searchhelp').modal('show');
+            return callback();
+        }
+        query = query.toLowerCase();
+        var url = '/api/matter/fuzzylistforselection';
+        this._objectname = 'matter';
+        if (query.indexOf(':')>=0) {
+            var parts = query.split(':', 2);
+            this._objectname = omap[parts[0]] ? omap[parts[0]]: parts[0];
+            query = parts[1];
+            url = '/api/'+this._objectname+'/listforselection';
+        } else if (query.indexOf(' ')>0) {
+            var parts = query.split(' ', 2);
+            if (omap[parts[0]]) {
+                this._objectname = omap[parts[0]]
+                query = parts[1];
+                if (query == '>') {
+                    location.href = '/'+this._objectname+'/insert';
+                    callback();
+                } else if (query == '.') {
+                    location.href = '/'+this._objectname+'/list';
+                    callback();
+                } else if (query.indexOf('today')>=0) {
+                query = query.replace('today', moment().format('YYYY-MM-DD'));
+                } else if (query.indexOf('tomorrow')>=0) {
+                    query = query.replace('tomorrow', moment().add(1, 'days').format('YYYY-MM-DD'));
+                } else if (query.indexOf('yesterday')>=0) {
+                    query = query.replace('yesterday', moment().subtract(-1, 'days').format('YYYY-MM-DD'));
+                }
+                url = '/api/'+this._objectname+'/listforselection';
+
+            }
+        }
+        if (query.length < 2) return callback();
+            if (matter_lookup) { matter_lookup.abort(); }
+            matter_lookup = $.ajax({
+                global: false,
+                url: url,
+                data: {search: query},
+                type: 'GET',
+                error: function() {
+                    callback();
+                },
+                success: function(r) {
+                    select_fields[0].selectize.clear();
+                    select_fields[0].selectize.clearOptions();
+                    var data = r.data.slice();
+                    data.push({uid: '_widesearch', name: query});
+                    callback(data);
+                }
+            });
+        },
+    render: {
+        option: function(item, escape) {
+            if (item.uid == '_clear') {
+                return '<div class="option"><i>' + escape(item.name) + '</i></div>'
+            }
+            if (item.uid == '_widesearch') {
+                return '<div class="option">Try wider search for <em>' + escape(item.name) + '</em></div>';
+            }
+            return '<div class="option">' + escape(item.name) + '</div>';
+        }
+    },
+    onChange: function(v) {
+        if (!v) return;
+        if (v == '_clear') {
+            localStorage.removeItem('recentheadersearches_dci');
+            location.reload();
+            return;
+        }
+        if (v == '_widesearch') {
+            location.href = '/search?q=' + encodeURIComponent(this.options[v].name);
+            return;
+        }
+        var exists = false;
+        $.each(recents, function(i, row) {
+            if (row.uid == v) exists = true;
+        });
+        if (!exists) {
+            recents.unshift({'uid': v, 'name': this.options[v].name, 'objectname': this._objectname});
+        }
+        if (recents.length > 25) {
+            recents = recents.slice(0, 25);
+        }
+        //recents.splice(0, 25);
+        localStorage.setItem('recentheadersearches_dci', JSON.stringify(recents));
+        if (this.options[v].objectname) this._objectname = this.options[v].objectname;
+        location.href = '/'+this._objectname+'/detail/'+v;
+    }
+});
+
+
+
+function getissuecount() {
+    $.ajax({
+        global: false,
+        url: "/api/dashboard/issuecount",
+        type: 'GET',
+        success: function(data) {
+            if (parseInt(data)) {
+                $(".issuecount").html(data);  // data is the int value
+                $(".issuecount").fadeIn();
+
+                // Dashboard valuesm if they are around...
+                $("#issuecount").html(data);  // data is the int value
+                $("#issues").closest('a').prop('href', "/dashboard/myissues");
+                $("#stufftodo").fadeIn();
+                $("#issues").slideDown();
+            } else {
+                $(".issuecount").fadeOut();
+                $("#issues").fadeOut();
+            }},
+        error: function() {
+            $("#issuecount").html("&#9888;"); // Warning sign.
+        },
+	});
+}
+function getjustissues() {
+    $.get({global: false, url: "/api/dashboard/justissues?makelinks=&limit=5"}, function(data) {
+        var html = "";
+        $(data).each(function(i, row) {
+            html += '<a class="list-group-item media" href="/issue/summarydetail/'+row['issue_uid']+'">';
+            if (row['gravatar']) {
+                html += '<div class="pull-left">' +
+                          '<img class="lgi-img" src="//www.gravatar.com/avatar/' + row['gravatar'] + '?d=identicon" alt="">' +
+                        '</div>';
+            }
+            //html += '<div class="media-body">';
+            html += '<div class="lgi-heading">' + row['creator_login_name'] + '</div>';
+            html += '<small class="lgi-text">' + row['issue_name'] + '</small>';
+            //html += '</div>';
+            html += '</a>';
+        });
+    });
+}
+$(document).ready(function() {
+    $('#main').on('focus', function() {
+        $('#header').removeClass('search-toggled');
+    });
+    getissuecount();
+    getjustissues();
+});
+$(document).on('change', ':checkbox.issueteam', function() {
+
+    $.post('/api/team/' + (this.checked ? 'join': 'leave') + '/' + $(this).data('id')).then(function() {
+        getjustissues();
+    }, function() {
+        getjustissues();
+        swal({type: 'error', text: 'Error changing teams. Please ask your login manager to add or remove you from teams.'});
+    });
+})
+
+</script>
+<div class="modal fade" id="newsearchhelp" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">New Search Help</h4>
+            </div>
+            <div class="modal-body">
+                <p>This header search is now a search-engine style search across matters, clients, suppliers, invoices, collection debtors and more. Use quotatation marks to do phrase searches, minus (-) to search by exclusion of keyword.</p>
+                <p>Shortcut Key Tip: You can activate the header search with the shortcut key forwardslash <code>/</code> (whereas backslash <code>\</code> focuses the menu filter search on the left).</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-link" data-dismiss="modal">Dismiss
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal fade" id="searchhelp" tabindex="-1" role="dialog" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h4 class="modal-title">Header Search Help</h4>
+            </div>
+            <div class="modal-body">
+                <p>Just start typing to search for matters. Enter all or some of the letters of a matter or client to search for a matter. Eg <code>nkosinathi</code></p>
+                <p>Searches of other items are possible by preceding the search with a keyword and a space. Examples:</p>
+                <p>To search for an <strong>invoice</strong>, type invoice followed by space and then part of the invoice number, reference or amount. Eg <code>invoice 1001</code></p>
+                <p>You can also use words like <code>today</code> or <code>yesterday</code> or specify a date in ISO format (YYYY-MM-DD)af. Use <code>&gt;</code> to indicate that you want to create a new record, or <code>.</code> to indicate you want to navigate to a list of records. Here are some example searches to find records and transactions:</p>
+                <ul class="list-unstyled">
+                    <li><code>receipt 1000</code></li>
+                    <li><code>client acme</code></li>
+                    <li><code>supplier woolworths</code></li>
+                    <li><code>account telephone</code></li>
+                    <li><code>invoice today</code></li>
+                    <li><code>receipt yesterday</code></li>
+                    <li><code>supplier &gt;</code>(to create new supplier)</li>
+                    <li><code>client .</code>(to go to a tabular list of clients)</li>
+                </ul>
+                <p>Shortcut Key Tip: You can activate the header search with the shortcut key forwardslash <code>/</code> (whereas backslash <code>\</code> focuses the menu filter search on the left).</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-link" data-dismiss="modal">Dismiss
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+<section tabindex="-1" id="main">
+
+
+<aside id="sidebar" class="sidebar c-overflow">
+    <div class="s-profile">
+        <a href="" data-ma-action="profile-menu-toggle">
+
+            <div class="sp-logo">
+                <img class="img-thumbnail" src="/company/logo/dci" alt="dci">
+            </div>        
+                
+            <div class="sp-pic">
+                <img src="//www.gravatar.com/avatar/13840999a6512ed5ee5c6ad5c255f12c?d=identicon" alt="">
+            </div>
+            
+
+
+            <div class="sp-info">
+                Jessica-Jayde Dolata.dci
+                <i class="zmdi zmdi-caret-down"></i>
+            </div>
+        </a>
+
+        <ul class="main-menu">
+            <li>
+                <a href="/access/changedetail"><i class="zmdi zmdi-account"></i> Account Settings</a>
+            </li>
+
+            <li>
+                <a href="/access/logout"><i class="zmdi zmdi-time-restore"></i> Logout</a>
+            </li>
+        </ul>
+    </div>
+        <a href="#" id="hidereversals" class="badge" style="float: left">Reversals Shown</a>
+    <span id="freezedate"></span>
+
+
+<ul class="main-menu">
+<li class="exclude menusearch"><a><i class="zmdi zmdi-search"></i> <input id="menusearch" type="search" class="form-control" placeholder="Filter Menu..." /></a></li>
+
+
+<li><a href="/"><i class="zmdi zmdi-home"></i> Dashboard</a></li>
+<li><a href="/matter/calendar"><i class="zmdi zmdi-calendar"></i> Calendar</a></li>
+<li class="sub-menu">
+    <a class="active" data-ma-action="submenu-toggle" href="#"><i class="zmdi zmdi-account-calendar"></i> Fee Earner</a>
+    <ul>
+        <li><a href="/salesagent/timesheet">Time Sheet</a></li>
+        <li><a href="/matterdraftlineitem/percentagefees">Percentage Fees</a></li>
+        <li class="sub-menu"><a data-ma-action="submenu-toggle" href="#">Recurring Billing</a>
+            <ul>
+                <li><a href="/schedule/list">Schedules</a></li>
+                <li><a href="/subscription/list">Subscriptions</a></li>
+            </ul>
+        </li>
+        
+        <li><a href="/product/importbundles">Tariff Bundles</a></li>
+        <li class="sub-menu"><a data-ma-action="submenu-toggle" href="#">Document Automation</a>
+        <ul>
+            <li><a href="/doctemplate/list">Manage Templates</a></li>
+        </ul>
+        </li>
+        <li><a href="/matterdraftlineitem/importwip">Import WIP/Invoices</a></li>
+        <li><a href="/matter/importfile">Import Matters</a></li>
+        <li><a href="/matterlist/list">Matter Groups</a></li>
+    </ul>
+</li>
+<li class="sub-menu">
+    <a class="active" data-ma-action="submenu-toggle" href="#"><i class="zmdi zmdi-assignment-return"></i> Collections</a>
+    <ul>
+        <li><a href="/collection/list">Debtors</a></li>
+        <li><a href="/collection/bulkload">Bulk Import</a></li>
+        <li><a href="/collectionreceipt/list">Collection Receipts</a></li>
+        <li><a href="/collectiondirectreceipt/list">Direct Receipts</a></li>
+        <li><a href="/collection/capitalvsreceivedreport">Capital vs Received Report</a></li>
+        <li><a href="/collection/summaryreport">Collections Summary Report</a></li>
+    </ul>
+</li>
+<li id="dynamic-menu" class="sub-menu" style="display: none;">
+    <a class="active" data-ma-action="submenu-toggle" href="#">
+        <i class="zmdi zmdi-format-list-bulleted"></i> Workflow
+    </a>
+    <ul id="dynamic-menu-items">
+        <!-- Items will be inserted here dynamically -->
+    </ul>
+</li>
+<script>
+$(document).ready(function() {
+    $.ajax({
+        url: '/api/dtt/menuitems',
+        method: 'GET',
+        dataType: 'json',
+        global: false,
+        success: function(r) {
+            var data = r.items;
+            if (data && data.length > 0) {
+                var $menuItems = $('#dynamic-menu-items');
+                
+                // Clear any existing items
+                $menuItems.empty();
+                
+                // Add new items
+                $.each(data, function(index, item) {
+                    var $li = $('<li>');
+                    var $a = $('<a>', {
+                        text: item.title || item.name,
+                        title: item.description || '',
+                    });
+                    
+                    if (item.disabled) {
+                        $li.addClass('text-muted');
+                        $li.prop('title', 'You do not have permission to perform this workflow');
+                        $a.prepend('<i class="zmdi zmdi-lock"></i> ');
+                    } else {
+                        $a.prop('href', item.url || '#');
+                    }
+                    $li.append($a);
+                    $menuItems.append($li);
+                });
+                
+                // Show the menu only if we have items
+                $('#dynamic-menu').show();
+                
+                // If you're using any special menu initialization
+                if (typeof $.fn.dataMA !== 'undefined') {
+                    $('#dynamic-menu').dataMA('submenu-toggle');
+                }
+            } else {
+                $('#dynamic-menu').addClass('exclude');
+            }
+        },
+        error: function(jqXHR, textStatus, errorThrown) {
+            console.error('Error loading menu items:', textStatus, errorThrown);
+        }
+    });
+});
+</script>
+
+<li class="sub-menu"><a class="active" data-ma-action="submenu-toggle" href="#"><i class="zmdi zmdi-money-box"></i> Bookkeeper</a>
+    <ul>
+            <li class="sub-menu"><a data-ma-action="submenu-toggle" href="#">Posting Transactions</a>
+                <ul>
+                    <li><a title="Record any Business or Trust monies received by the practice (usually EFTs)." href="/customerpayment/capture">Matter Receipts</a></li>
+                    <li><a title="Record any Business or Trust payments made to or on behalf of a Client (against a Matter)." href="/matterpayment/capture">Matter Payments</a></li>
+                    <li><a title="Record a suppliers invoice, whether from an Advocate (disbursement) or the local stationery store (business)." href="/purchaseinvoice/capture" >Supplier Invoices (Expenses)</a></li>
+                    <li><a title="Record payments made by the practice to a supplier, whether to an Advocate, Sheriff or the local stationery store." href="/supplierpayment/businesspayment">Supplier Payments</a></li>
+                    <li><a title="Record a business receipt against a general ledger account (for example SARS refund)" href="/businessreceipt/insert">Business Receipt</a></li>
+                    <li><a title="Record a business payment against a general ledger account (for example paying SARS, or partner drawings)" href="/businesspayment/insert">Business Payment</a></li>
+                    <li><a title="Record investments or withdrawals between a client's LPA Section 86(4) investment and the trust account." href="/section782biga/capture?_referer=/section782biga/capture" >LPA Section 86(4) Investments / Withdrawals</a></li>
+                    <li><a  title="Record interest or charges on a client's LPA Section 86(4) investment account" href="/section782biga/capturecharges">LPA Section 86(4) Interest / Charges</a></li>
+                    <li><a title="Process the automatically calculated trust transfer report and/or update." href="/trusttransfer/report">Trust Transfers</a></li>
+                    <li><a title="Typically used to move monies from the Cashbox to a Bank account or Petty Cash. Always only between Business or Trust accounts." href="/bankxfer/capture">Bank Transfers</a></li>
+                    <li><a title="Record a Bad Debt (or Bad Debt Recovered)." href="/baddebt/insert">Bad Debts</a></li>
+                    <li><a title="Mark accounting entries in LawPracticeZA as reconciled" href="/bankaccount/offlinebankrecon">Bank Reconciliation</a></li>
+                    <li><a title="Post adjustments between accounts" href="/journalentry/capture" >Journal Entries</a></li>
+                    <li class="sub-menu"><a data-ma-action="submenu-toggle" href="#">List by Type</a>
+                    <ul>
+                    <li><a href="/bankxfer/list">Bank Transfers</a></li>
+                    <li><a href="/baddebt/list">Bad Debts</a></li>
+                    <li><a href="/businesspayment/list">Business Payments</a></li>
+                    <li><a href="/businessreceipt/list">Business Receipts</a></li>
+                    <li><a href="/journalentry/list">Journal Entries</a></li>
+                    <li><a href="/section782biga/list">LPA Section 86(4)</a></li>
+                    <li><a href="/matterpayment/list">Matter Payments</a></li>
+                    <li><a href="/customerpayment/list">Matter Receipts</a></li>
+                    <li><a href="/purchaseinvoice/list">Purchase/Supplier Invoices (Expenses)</a></li>
+                    <li><a href="/salescreditnote/list">Sales Credit Notes</a></li>
+                    <li><a href="/salesinvoice/list">Sales Invoices</a></li>
+                    <li><a href="/supplierpayment/list">Supplier Payments</a></li>
+                    <li><a href="/trustpayment/list">Trust Payments</a></li>
+                    <li><a href="/trustreceipt/list">Trust Receipts</a></li>
+                    <li><a href="/trusttransfer/list">Trust Transfers</a></li>
+                    <li><a href="/forex/list">Forex</a></li>
+                    <li><a href="/pfinvoice/list">Proforma Invoices</a></li>
+                    </ul></li>
+                    <li><a href="/partition/list">Partition List</a></li>
+                    <li><a href="/partition/insert">Add Partition</a></li>
+
+                </ul>
+            </li>
+        <li class="sub-menu"><a data-ma-action="submenu-toggle" href="#">Masterfile Maintenance</a>
+            <ul>
+                <li><a href="/account/list">General Ledger Accounts</a></li>
+                <li><a href="/accountcategory/list">GL Account Categories</a></li>
+                <li><a href="/supplier/list">Suppliers</a></li>
+                <li><a href="/department/list">Departments</a></li>
+                <li><a href="/product/list">Posting Codes (Activities)</a></li>
+                <li><a href="/productcategory/list">Posting Code Categories</a></li>
+                <li><a href="/cannednarration/list">Canned Narrations</a></li>
+                <li><a href="/customer/list">Clients</a></li>
+                <li><a href="/matter/list">Matters</a></li>
+                <li><a href="/mattertype/list">Matter Types</a></li>
+                    <li><a href="/matter/movematter">Move Matter</a></li>
+                <li><a href="/matterlist/list">Matter Groups</a></li>
+                <li><a href="/contact/list">Contacts</a></li>
+                <li><a href="/bankaccount/list">Business &amp; Trust Banks</a></li>
+                <li><a href="/customerpaymentmethod/list">Receipt Methods</a></li>
+                <li><a href="/suppliertype/list">Supplier Types</a></li>
+            </ul>
+        </li>
+            <li><a href="/bankstatementfile/listuploaded">Bank Reconzilla</a></li>
+        <li class="sub-menu"><a data-ma-action="submenu-toggle" href="#">Reports</a>
+            <ul>                
+                    <li><a href="/report/index" title="An index of all reports.">Report Index</a></li>
+                    <li><a href="/reportschedule/list" title="List of all Scheduled Reports">Scheduled Reports</a></li>
+                    <li><a href="/account/listalltransactionsbyaccount" title="A spreadsheet of all accounts and their balances, for a given date range">Statement of Account(s)</a></li>
+                    <li><a href="/report/audittrail" title="List of all transactions recorded for the specified period; &quot;Today&quot;, &quot;This Month&quot; or between specified dates">Audit Trail</a></li>
+                    <li><a href="/bankrecon/report" title="A report comparing the general ledger bank balance to the bank statement bank balance, including unreconciled items.">Bank Recon</a></li>
+                <li><a href="/customer/clientstatement" title="Produce a full accounting statement for a client with all matters (default) or for a specific matter (optional) as at a certain date.">Client Statement</a></li>
+                <li><a href="/customer/mattermovement" title="Client matter transaction movement report for given date range">Matter Movement</a></li>
+                <li><a href="/matter/movement" title="Matter transaction movement report for given date range including Owner">Matter Movement with Owner</a></li>
+                <li><a href="/matter/matterledger" title="Client matter transaction ledger for all matters for given date range">Detailed Matter Ledger</a></li>
+                <li><a href="/supplier/movement" title="Supplier transaction movement report for given date range">Supplier Movement</a></li>
+                    <li><a href="/account/statement" title="Produce a full accounting statement of a General Ledger, Supplier or Matter account for a specified date range.">Account Enquiry</a></li>
+                <li><a href="/trusttransfer/list" title="List previous Trust Transfers.">Trust Transfers</a></li>
+                <li><a href="/report/trustinvestments" title="A list of all trust and LPA Section 86(4) investments, followed by the investment balances for each client. The investment/committment must balance.">Trust Investments / Commitments</a></li>
+                <li><a href="/customer/ageanalysisall" title="A list of all debtors who owe the practice money, indicating how long the money has been owed. Contact name and phone number provided for quick follow-up.">Clients Age Analysis</a></li>
+                <li><a href="/supplier/ageanalysisall" title="A list of all supplier to whom the practice owes money, indicating how long the money has been owed. Contact name and phone number provided.">Suppliers Age Analysis</a></li>
+                <li><a href="/salesagent/targetreport" title="Show billed and unbilled fees against monthly target for each fee earner. Requires a target to be set on each Fee Earners in Masterfile Maintenance">Target Report</a></li>
+                <li><a href="/salesagent/feesreport" title="Show all fees and time against monthly target for each fee earner.">Fees Report</a></li>
+                <li><a href="/report/unbilled_from_accountentry" title="A list of all unbilled fees and pending disbursements that have not yet been converted into an invoice, by Matter.">Unbilled Fees and Disbursements</a></li>
+                <li><a href="/report/unbillablereport" title="A list of all unbillable fees">Unbillable Fees</a></li>
+                <li><a href="/report/invoiced2" title="A list of all invoiced fees and disbursements for a specific date range.">Invoiced Fees and Disbursements
+                </a></li>
+                <li><a href="/dashboard/saleschart" title="A quick chart of sales per department per month">Sales Chart</a></li>
+                    <li><a href="/report/recentreceiptactivity" title="A list of recent receipts for matters.">Receipt Activity Report</a></li>
+                <li><a href="/vat/vat201" title="List all transactions that attract VAT, with separate VAT In and Out sections with totals corresponding with the VAT 201 return.">VAT Report
+                </a></li>
+                <li><a href="/salesinvoice/bulkpdfinvoices" title="Submits a job to compile a .zip of all PDF invoices for a given date range">Bulk PDF Invoices</a></li>
+                <li><a href="/customer/compliancereport">FICA Status Report</a></li>
+                <li><a href="/customer/newclients">New Clients</a></li>
+                <li><a href="/report/newmatterssince">New Matters Since</a></li>
+                    <li><a href="/report/profitability" title="Income & Expenses shows per month since all time." >Monthly Profitability</a></li>
+                    <li><a href="/account/financialreports" title="Trial Balance, Income &amp; Expenses and Balance Sheet." >Financial Reports</a></li>
+                    <li><a href="/report/accountmovementbymonth?currency_uid=ZAR">Account Movement Report</a></li>
+                    <li><a href="/report/salesinvoicesvsincomeaccounts">Sales Invoices vs Income accounts</a></li>
+                    <li><a href="/report/advancedentrysearch">Advanced Entry Search</a></li>
+                    <li><a href="/doyaemail/report">Email Delivery</a></li>
+                    <li><a href="/matterdiary/xls?lookup=1&datefilter=all&salesagentfilter=everyone&showlast=1">Matter Diary Report</a></li>
+                    <li><a href="/zerogroup/report">ZG: Unallocated Receipts & Payments</a></li>
+                    <li><a href="/zerogroup/reportallocated">ZG: Allocated Receipts & Payments</a></li>
+                    <li><a href="/zerogroup/reportallocatedbyinvoice">ZG: Allocated Receipts by Invoice</a></li>
+                    <li class="sub-menu"><a href="/report/analytics" title="A collection of charts and other useful reports.">Analytics</a>
+                        <ul>
+                            <li><a href="/account/debitsvscredits">Debits vs Credits</a></li>
+                            <li><a href="/report/matteractivitybytype">Matter Activity by Type</a></li>
+                            <li><a href="/report/alldisbursements">All Disbursements</a></li>
+                            <li><a href="/matter/mreportfeeallocation">Fee Allocation</a></li>
+                            <li><a href="/matter/noactivity">Matters with no activity</a></li>
+                            <li><a href="/report/timeallocation">Fee Earners Time Allocation</a></li>
+                            <li><a href="/report/debtordays">Debtor Days</a></li>
+                            <li><a href="/report/investmentreport">Section 86(4) Report</a></li>
+                            <li><a href="/report/systemstats">System Stats</a></li>
+                            <li><a href="/company/activityreport">Login Activity Report</a></li>
+                        </ul>
+                    </li>
+            </ul>
+        </li>
+        <li class="sub-menu"><a data-ma-action="submenu-toggle" href="#">Period End (Freeze Date)</a>
+            <ul>
+                <li><a href="/matter/bulkinvoicing" title="Tick/untick clients and matters to send proforma invoices or to issue/send invoices.">Bulk Proformas/Invoicing</a></li>
+                <li><a href="/customer/sendstatements" title="Tick/untick clients and matters to send them statements by email." >Send Statements</a></li>
+                <li><a href="/freezedate/list" title="Set the date before which no accounting transactions may be altered. Or close off the year.">Set Period End (Freeze Date)</a></li>
+            </ul>
+        </li>
+    </ul>
+</li>
+
+    <li class="sub-menu"><a class="active" data-ma-action="submenu-toggle" href="#"><i class="zmdi zmdi-accounts"></i> Payroll</a>
+        <ul>
+            <li><a href="/staff/list">Staff</a></li>
+            <li><a href="/staffpayment/list">Staff Payments</a></li>
+            <li><a href="/payslip/list">Payslips</a></li>
+            <li><a href="/payslipdeduct/list">Deduction Types</a></li>
+            <li><a href="/payslip/payslipreportpdf">Report</a></li>
+
+        </ul>
+    </li>
+
+
+<li class="sub-menu"><a data-ma-action="submenu-toggle" href="#"><i class="zmdi zmdi-link"></i> 3<sup>rd</sup> Party Integrations</a>
+    <ul>
+        <li><a href="/access/e4" title="e4 Transfers">e4 Transfers</a></li>
+        <li><a href="/access/outlookaddinsetup" title="Outlook Email Add-in">Outlook Email Add-in <i class="zmdi zmdi-sparkle"></i></a></li>
+        <li><a href="/access/gcal" title="Google Calendar Settings">Google Calendar</a></li>
+        <li><a href="/access/gdrive" title="Google Drive Settings">Google Drive</a></li>
+        <li><a href="/company/kwhezi">Kwhezi Cost Recovery</a></li>
+        <li><a href="/access/kofax" title="Kofax cost recovery">Kofax</a></li>
+        <li><a href="/access/papercut" title="Paper Cut printing cost recovery">Paper Cut</a></li>
+        <li><a href="/access/printdirector" title="Print Director printing cost recovery">Print Director</a></li>
+        <li><a href="/access/softlog" title="Softlog cost recovery">Softlog</a></li>
+        <li><a href="/docfox/load" title="nCino/DocFox">nCino/DocFox</a></li>
+        <li><a href="/access/website">Firm's Website</a></li>
+    </ul>
+</li>
+
+
+        <li class="sub-menu"><a class="active" data-ma-action="submenu-toggle" href="#"><i class="zmdi zmdi-settings"></i> Admin</a>
+            <ul>
+                <li><a href="/login/list" title="Administer access to LawPracticeZA for your users">Logins</a></li>
+                <li><a href="/salesagent/list">Fee Earners</a></li>
+                <li><a href="/feelevel/list">Fee Levels</a></li>
+                <li><a href="/company/update/only">Firm Details</a></li>
+                <li><a href="/company/setsequences">Set Sequences</a></li>
+                <li><a href="/freezedate/settempfreezedate">Set Temporary Freeze Date</a></li>
+                <li><a href="/currency/tool">Currencies</a></li>
+                <li class="sub-menu"><a data-ma-action="submenu-toggle" href="#"> Import Data</a>
+                <ul>
+                    <li><a href="/matter/importfile">Import Matters</a></li>
+                    <li><a href="/product/importpostingcodes">Import Posting Codes (Activities)</a></li>
+                    <li><a href="/matterdraftlineitem/importwip">Import WIP/Invoices</a></li>
+                    <li><a href="/supplier/importfile">Import Suppliers</a></li>
+                    <li><a href="/supplier/importexpenses">Import Expenses / Disbursements</a></li>
+                    <li><a href="/account/importfile">Import General Ledger</a></li>
+                </ul>
+                </li>
+                <li class="sub-menu"><a data-ma-action="submenu-toggle" href="#"> Export Data</a>
+                    <ul>
+                        <!-- <li><a href="/matter/importfile">Import Matters</a></li>
+                        <li><a href="/product/importpostingcodes">Import Posting Codes</a></li>
+                        <li><a href="/matterdraftlineitem/importwip">Import WIP/Invoices</a></li>
+                        <li><a href="/supplier/importfile">Import Suppliers</a></li> -->
+                        <li><a href="/account/exportfile">Export General Ledger</a></li>
+                        <li><a href="/matter/exportfile">Export Matters</a></li>
+                        <li><a href="/matterdraftlineitem/exportwip">Export WIP History</a></li>
+                    </ul>
+                    </li>
+            </ul>
+        </li>
+<li><a href="/lpdoc/view/lawpracticeza-instruction-manual"><i class="zmdi zmdi-help"></i> Instruction Manual / Help</a></li>
+</ul>
+</aside>
+<script>
+function gethidereversals() {
+    $.ajax({
+        url: "/api/company/gethidereversals",
+        global: false,
+        type: 'get',
+        success: function(result) {
+            $("#hidereversals").data('hidereversals', result['hidereversals']);
+            if (result['hidereversals']) {
+                $("#hidereversals").html("Reversals Hidden");
+            }
+            else {
+                $("#hidereversals").html("Reversals Shown");
+            }
+            $(document).trigger('reversals_state_change', [result]);
+        }
+    });
+}
+function getfreezedate() {
+    $.ajax({
+        url: "/api/freezedate/getfreezedate2",
+        global: false,
+        type: "get",
+        success: function(result) {
+            if (result['date'] > '1970-01-01') {
+                if (result['type'] == 'temporary') {
+                    $("#freezedate").html("<a title=\"Temporary Period Start (freezedate)\" class=\"badge badge-danger alert-danger\" style=\"float: right\">(("+result['date']+"))</a>"); 
+                } else {
+                    $("#freezedate").html("<span title=\"Period Start (freezedate)\" class=\"badge badge-primary\" style=\"float: right\">"+result['date']+"</span>");
+                }
+
+            }
+        }
+    })
+}
+
+$(document).ready(function() {
+    getfreezedate();
+    var path = location.pathname;
+    $('.todo').css('color', 'orange');
+    $('[href="'+path+'"]').addClass('active');
+    $('.active').parents('li.sub-menu').addClass('active toggled');
+    $('#menusearch').val('');
+    $('.sp-info').click(function() { 
+        $('#menusearch').val('').trigger('input');
+    });
+    $('#freezedate').on('click', function(evt) {
+        evt.preventDefault();
+        $.ajax({
+            url: "/freezedate/deltempfreezedate",
+            global: false,
+            type: "post",
+            success: getfreezedate,
+            error: getfreezedate
+        });
+    });
+    $('#hidereversals').on('click', function(evt) {
+        evt.preventDefault();
+        $.ajax({
+            url: "/api/company/hidereversalstoggle",
+            global: false,
+            type: 'post',
+            success: function(result) {
+                gethidereversals();
+            },
+            error: function(result) {
+                $("#hidereversals").html("");
+            }
+        });
+    });
+    $('#hidereversals').data('hidereversals', 0);
+    $('#menusearch').on('keydown input', function() {
+        var v = $(this).val();
+        $('ul.main-menu li:not(.exclude)').show();
+        $('.searchresult').removeClass('searchresult');
+        if (v) {
+            $('li.sub-menu.active.toggled').removeClass('active').removeClass('toggled').removeClass('searchresult');
+            v = v.toLowerCase();
+            $('ul.main-menu li:not(.exclude) > a').each(function() {
+                var t = $(this).text().toLowerCase();
+                var li = $(this).parent();
+                if (t.indexOf(v) >=0 ) {
+                    li.show();
+                    li.addClass('searchresult');
+                    $(this).parents('li').show();
+                    $(this).parents('li.sub-menu').addClass('active toggled');
+                    
+                } else {
+                    li.hide();
+                }
+            });
+            //make sure any visible items have all their children visible too
+            $('.searchresult.sub-menu').addClass('active toggled').find('li').show();
+        }
+    });
+});
+</script>
+
+<section id="content">
+    <div class="container">
+		
+
+		
+		
+
+
+
+        
+<script>
+    if (!window.console) {
+        window.console = window.console || {log: function(){return false;}};
+    }
+    $(document).on("wheel", "input[type=number]", function (e) {
+        $(this).blur();
+    });
+</script>
+
+
+
+ 
+<div class="card">
+
+
+
+
+
+
+
+<script>
+function addParameterToURL(_url,_key,_value){
+	var param = _key+'='+escape(_value);
+	var sep = '&';
+	if (_url.indexOf('?') < 0) {
+		sep = '?';
+	} else {
+		var lastChar=_url.slice(-1);
+		if (lastChar == '&') sep='';
+		if (lastChar == '?') sep='';
+	}
+	_url += sep + param;
+
+	return _url;
+}
+window.formchanged=0;
+jQuery(document).ready(function($) {
+	
+
+	$('body').on('change', 'form[method="post"]', function() {
+		window.formchanged=1;
+	});
+	$('body').on('submit', 'form[method="post"]', function() {
+		window.formchanged=0;
+	});
+	$(window).bind('beforeunload', function() {
+		if (window.formchanged) {
+			return "You have unsaved changes.";
+		}
+	});
+	$('.number').on('change', function() {
+		// Remove any additional comma's or spaces.
+		$(this).val($(this).val().replace(/[, R$€]/g , ''));
+	});
+	$('.email').on('change', function() {
+		$(this).val($(this).val().trim());
+		$(this).val($(this).val().replace(/[ :;,]+/g , ''));
+	});
+});
+
+function incompleteform_insert(el, from_object, to_object, inputname, objectuid) {
+	//alert("Collapse this form "+from_object+" and load insert for "+to_object);
+	var form = $(el).parents("form");
+
+	$.post("/"+from_object+"/incompleteform_insert", {'url': location.href, 'formhtml': form.html(), 'formvalues': JSON.stringify(form.serializeArray()), 'to_object': to_object,'inputname': inputname, 'objectuid': objectuid}, function(result) {
+		if (to_object) {
+			referer = addParameterToURL(location.href,'incompleteform_load',result.uid)
+			location.href = "/"+to_object+"/insert?_referer="+escape(referer);
+		}
+		else {
+			alert("Saved as "+result.uid+".");
+		}
+	});
+	//alert("Done posting");
+
+}
+function getUrlVars() {
+    var vars = [], hash;
+    var hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
+    for(var i = 0; i < hashes.length; i++)
+    {
+        hash = hashes[i].split('=');
+        vars.push(hash[0]);
+        vars[hash[0]] = hash[1];
+    }
+    return vars;
+}
+
+jQuery(document).ready(function($) {
+	vars = getUrlVars();
+	if (vars['incompleteform_load']) {
+		$.get("/incompleteform/jsonget/"+vars['incompleteform_load'], function(result) {
+			var form = $("form:last")
+
+			formvalues = $.parseJSON(result.formvalues);
+			//form.html(result.formhtml); // We do this now on the server side with beautiful soup.
+			for (var i in formvalues) {
+				if (!vars[formvalues[i].name]) {
+					form.find(':input[name="'+formvalues[i].name+'"]').val(formvalues[i].value);
+				}
+			}
+			alert("Your draft form has been loaded.");
+		});
+	}
+});
+
+</script>
+<form role="form" class="doya form-horizontal" id="bulkpdfinvoicesform" method="post" action="https://lawpracticeza.com/salesinvoice/bulkpdfinvoices">
+<input type="hidden" name="_referer" value="https://lawpracticeza.com/report/investmentreport?asat=2026-04-19&amp;currency_uid=ZAR" />
+
+
+
+
+
+<script src="/doya/web/static/stickysession.js"></script>
+<div class="card-header m-b-10">
+<h2>Create a .zip of PDF invoices</h2>
+<div class="pull-right">
+	
+	
+	<!--<a class="btn btn-sm btn-primary" href="/bulkpdfinvoices/list" title="List"><i class="zmdi zmdi-grid"></i> List</a>-->
+</div>
+
+
+
+</div>
+<div class="card-body card-padding">
+
+<div class="card-header">
+<h2 class="col-md-offset-2 text-primary">For Date Range</h2>
+<div>
+Rendering a large number of PDFs may take some time so this request will be processed as a background job, and you will be notified when it completes as an issue (top right envelope).</div>
+
+</div>
+
+<div class="form-group">
+	<div class="col-sm-2 control-label no-padding-right">
+<label for="startdate">Start Date</label>
+</div>	<div class="col-sm-10">	
+
+
+<div class="col-xs-6">
+<div class='input-group datepicker'>
+	<input type="text"  class="input-sm dateISO date-picker form-control" name="startdate" id="startdate" value=""  />
+	<span class="input-group-addon input-group-addon">
+		<button type="button" class="btn btn-default"><i class="fa fa-calendar"></i></button>
+	</span>
+</div>
+</div>
+
+
+
+	<span class="middle text-muted comment">
+</span>	</div>
+</div>
+
+
+<div class="form-group">
+	<div class="col-sm-2 control-label no-padding-right">
+<label for="enddate">End Date</label>
+</div>	<div class="col-sm-10">	
+
+
+<div class="col-xs-6">
+<div class='input-group datepicker'>
+	<input type="text"  class="input-sm dateISO date-picker form-control" name="enddate" id="enddate" value=""  />
+	<span class="input-group-addon input-group-addon">
+		<button type="button" class="btn btn-default"><i class="fa fa-calendar"></i></button>
+	</span>
+</div>
+</div>
+
+
+
+	<span class="middle text-muted comment">
+</span>	</div>
+</div>
+
+<div class="form-group">
+	
+<div class="form-group">
+<div class="col-xs-offset-2">
+<button class="btn btn-success btn-md" id="_ok" name="_ok" type="submit" value="OK"
+	>OK</button>
+<button class="btn btn-warning btn-md" id="_cancel" name="_cancel" type="button" value="Cancel"
+ onclick="$(this).parents('form').trigger('reset'); history.go(-1)" 	>Cancel</button>
+</div>
+</div>
+<script>
+
+decodeBase64 = function(s) {
+	if (!s) s = '';
+    var e={},i,b=0,c,x,l=0,a,r='',w=String.fromCharCode,L=s.length;
+    var A="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    for(i=0;i<64;i++){e[A.charAt(i)]=i;}
+    for(x=0;x<L;x++){
+        c=e[s.charAt(x)];b=(b<<6)+c;l+=6;
+        while(l>=8){((a=(b>>>(l-=8))&0xff)||(x<(L-2)))&&(r+=w(a));}
+    }
+    return r;
+};
+
+	jQuery(document).ready(function ($) {
+			$("#bulkpdfinvoicesform").submit(function() {
+				if (!$(this).valid()) { $('#bulkpdfinvoicesform').data('submitting', false); return false; }
+				if ($('#bulkpdfinvoicesform').data('submitting')) return false;
+			    $(this).ajaxSubmit({
+			    	   beforeSerialize: function(form, options) { $('form.doya').trigger('beforeserialize', form, options); },
+			    	   beforeSubmit: function() { $('#bulkpdfinvoicesform').data('submitting', true); },
+			           type: "post",
+			           url: "".replace("/save","/asave"),
+			           error: function(httprequest, textstatus, errorthrown) {
+						    $('#bulkpdfinvoicesform').data('submitting', false);
+							//alert(httprequest.responseText);
+							//This prevents the message from being blank.
+							
+							var hasText = $('<div>').html(httprequest.responseText).text().trim();
+							html = hasText ? httprequest.responseText : $('<div>').text(httprequest.responseText).html();
+
+							var hasText = $('<div>').html(errorthrown).text().trim();
+							errorthrown = hasText ? errorthrown : $('<div>').text(errorthrown).html();
+
+							swal({title: errorthrown, type: "error", html: html});
+			           },
+			           success: function(data, textstatus, httprequest) {
+			           		window.formchanged = 0;
+			           		url = httprequest.getResponseHeader('X-Redirect');
+			           		notice = decodeBase64(httprequest.getResponseHeader('X-feedbacknotice'));
+							swal({title: "Saved", text: notice, type: "success"}).then(function() {
+								location.href = url;
+							});
+			           }
+			         });
+			    return false;
+			});
+
+		});
+</script>
+
+
+</div>
+</div>
+</form>
+</div>
+
+
+
+
+
+
+
+
+
+
+    </div>
+</section>
+</section>
+<footer id="footer">
+    Copyright &copy; Nitric Software Laboratory &nbsp;<br/>
+    lawpracticeza_v3 on faro
+<form id="supportissueform" method="post" action="/issue/supportquery">
+<button type="submit" class="btn btn-sm bgm-teal c-white" id="supportissue" title="Need Help?"><i class="zmdi zmdi-help-outline"></i> Submit a Support Request</button>
+<input id="supportissuecanvas" name="canvas" type="hidden">
+</form>
+</footer>
+<script src="/static/material-admin/js/app.js"></script>
+<script>
+$(document).ready(function() {
+    $('#content').checkboxDragSelect();
+    
+
+$(document).ajaxStart(function() {
+	$('.loading').show();
+});
+$(document).ajaxStop(function() {
+	$('.loading').hide();
+});
+
+
+$.validator.setDefaults({
+    ignore: ':hidden:not([class~=selectized]),:hidden > .selectized, .selectize-control .selectize-input input',
+});
+$('form#bulkpdfinvoicesform').validate({"errorClass": "text-danger"});
+
+
+
+
+
+
+$('#enddate').closest('.input-group').datetimepicker({format: 'YYYY-MM-DD', useCurrent: true, widgetPositioning: {'horizontal': 'right'} });
+Inputmask('datetime', {inputFormat: 'yyyy-mm-dd'}).mask('#enddate');
+
+
+
+
+
+
+
+
+$('#startdate').closest('.input-group').datetimepicker({format: 'YYYY-MM-DD', useCurrent: true, widgetPositioning: {'horizontal': 'right'} });
+Inputmask('datetime', {inputFormat: 'yyyy-mm-dd'}).mask('#startdate');
+
+
+
+$('select.required').each(function() {
+	if (this.options.length==2 && this.selectedIndex==0) {
+		this.selectedIndex = 1;
+	}
+});
+$('input[type="hidden"].required').removeClass('required');
+$(document).ready(fixrequired);
+$(document).on('after_subform_addrow'. fixrequired);
+$('.floatpdf').on('click', function() {
+	var obj = $(this).next().remove();
+	obj.css({"border": "4px solid #eee"});
+	var div = $('<div />').prependTo('body');
+	div.css({position: 'fixed', height: '90%', width: '33%', left: '67vw', top: '10%', "z-index": 99999, "class": "bgm-white floatypdf", "padding": "4px", "display": "inline-block"});
+	div.append('<button type="button" class="btn btn-default btn-xs floatpdfminimise"><i class="zmdi zmdi-window-minimize"></i></button>');
+	div.append(obj);
+	div.resizable({handles: "n, e, s, w, ne, nw, se, sw"});
+	div.draggable({cursor: "crosshair"});
+	$('#rightpanel').toggleClass('toggled');
+});
+$(document).on('click', '.floatpdfminimise', function() {
+	$(this).next().toggleClass('hidden');
+});
+
+
+    $("#supportissueform").submit(function (evt) {
+        evt.preventDefault();
+        html2canvas(document.body).then(function(canvas) {
+            //document.body.appendChild(canvas);
+            //var dataURL = canvas.toDataURL();
+            $("#supportissuecanvas").val(canvas.toDataURL('image/png'));
+            $('#supportissueform')[0].submit();
+        });
+    });
+});
+</script>
+
+<div style="display: none" class="loading preloader pl-xl">
+<svg class="pl-circular" viewBox="25 25 50 50">
+    <circle class="plc-path" cx="50" cy="50" r="20"/>
+</svg>
+</div>
+<script>
+
+// This prevents the up and down arrow from changing numeric fields by 0.01, etc.
+document.addEventListener('keydown', function(e) {
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && e.target.type === 'number') {
+        e.preventDefault();
+    }
+});
+
+growl = function(message, title, type, icon, url, from, align, animIn, animOut) {
+    title = title || 'Success! ';
+    from = from || 'top';
+    align = align || 'right';
+    animIn = animIn || 'animated fadeInRight';
+    animOut = animOut || 'animated fadeOutRight';
+    icon = icon || 'fa fa-check';
+    type = type || 'success';
+    url = url || '';
+    $.growl({
+        icon: icon,
+        title: title,
+        message: message,
+        url: url,
+    },{
+            element: 'body',
+            type: type,
+            allow_dismiss: true,
+            placement: {
+                    from: from,
+                    align: align
+            },
+            offset: {
+                x: 20,
+                y: 85
+            },
+            spacing: 10,
+            z_index: 1031,
+            delay: 6000,
+            timer: 1000,
+            url_target: '_blank',
+            mouse_over: false,
+            animate: {
+                    enter: animIn,
+                    exit: animOut
+            },
+            icon_type: 'class',
+            template: '<div data-growl="container" class="alert" role="alert">' +
+                            '<button type="button" class="close" data-growl="dismiss">' +
+                                '<span aria-hidden="true">&times;</span>' +
+                                '<span class="sr-only">Close</span>' +
+                            '</button>' +
+                            '<span data-growl="icon"></span> ' +
+                            '<span data-growl="title"></span>' +
+                            '<span data-growl="message"></span>' +
+                            '<a href="#" data-growl="url"></a>' +
+                        '</div>'
+    });
+};
+
+
+$(document).on('ready', function() {
+    $.fn.dataTable.ext.search.push(       
+        function(settings, data, dataIndex) {
+            var reversalcolnum;
+            // Look for a reversal column
+            // console.log(settings);
+            // console.log(dataIndex);
+            $(settings.aoColumns).each(function(_, item) {
+                if (item.data == 'reversal' || item.name == 'reversal') {
+                    reversalcolnum = item.idx;
+                }
+            });
+            if (reversalcolnum != undefined && $("#hidereversals").data('hidereversals')) {
+                // console.log("Hide" + reversalcolnum);
+                return data[reversalcolnum] != 'R';
+            } else {
+                // console.log("Show" + reversalcolnum);
+                return true;
+            }
+            
+            
+        }
+    );
+    $("table.datatable:visible").each(function () {
+        $(this).DataTable().draw();
+    });
+    $("table.report:visible").each(function () {
+        $(this).DataTable().draw();
+    });
+        // table.draw();  
+});
+</script>
+</body>
+</html>

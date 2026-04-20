@@ -58,3 +58,6 @@ test-results/
 
 # Claude Code
 .claude/
+
+# local DB snapshots (production pg_dump)
+Documentation/Recon/snapshots/

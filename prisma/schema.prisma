@@ -13,41 +13,64 @@ enum UserRole {
   assistant
 }
 
-model User {
-  id                String    @id @default(uuid())
-  email             String    @unique
-  passwordHash      String    @map("password_hash")
-  firstName         String    @map("first_name")
-  lastName          String    @map("last_name")
-  initials          String
-  role              UserRole  @default(fee_earner)
-  defaultFeeLevelId    String?   @map("default_fee_level_id")
-  monthlyTargetCents   Int?      @map("monthly_target_cents")
-  isActive             Boolean   @default(true) @map("is_active")
-  totpSecret        String?   @map("totp_secret")
-  lastLoginAt       DateTime? @map("last_login_at")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
+enum VatFlag {
+  Y
+  N
+}
 
-  defaultFeeLevel    FeeLevel?          @relation(fields: [defaultFeeLevelId], references: [id])
-  clientsCreated     Client[]           @relation("ClientCreatedBy")
-  mattersOwned       Matter[]           @relation("MatterOwner")
-  mattersCreated     Matter[]           @relation("MatterCreatedBy")
-  matterUsers        MatterUser[]       @relation("MatterUserAccess")
-  matterUserGrants   MatterUser[]       @relation("MatterUserGrantedBy")
-  ficaUploads        FicaDocument[]     @relation("FicaUploadedBy")
-  matterAttachments  MatterAttachment[] @relation("AttachmentUploadedBy")
-  matterNotes        MatterNote[]       @relation("NoteCreatedBy")
-  diaryAssigned      DiaryEntry[]       @relation("DiaryAssignedTo")
-  diaryCreated       DiaryEntry[]       @relation("DiaryCreatedBy")
-  feeEntriesEarned   FeeEntry[]         @relation("FeeEntryEarner")
-  feeEntriesCreated  FeeEntry[]         @relation("FeeEntryCreatedBy")
-  invoicesCreated    Invoice[]          @relation("InvoiceCreatedBy")
-  suppliersCreated   Supplier[]         @relation("SupplierCreatedBy")
-  trustEntriesCreated   TrustEntry[]    @relation("TrustEntryCreatedBy")
-  businessEntriesCreated BusinessEntry[] @relation("BusinessEntryCreatedBy")
-  bankStatementsImported BankStatement[] @relation("StatementImporter")
-  bankMatches            BankMatch[]     @relation("BankMatchCreator")
+enum UnitType {
+  time
+  qty
+}
+
+enum TaxTypeCategory {
+  sales
+  purchase
+}
+
+enum NarrationContext {
+  matter_notes
+  fee_disb_narrations
+  diary_notes
+}
+
+model User {
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  passwordHash       String    @map("password_hash")
+  firstName          String    @map("first_name")
+  lastName           String    @map("last_name")
+  initials           String
+  role               UserRole  @default(fee_earner)
+  defaultFeeLevelId  String?   @map("default_fee_level_id")
+  monthlyTargetCents Int?      @map("monthly_target_cents")
+  isActive           Boolean   @default(true) @map("is_active")
+  totpSecret         String?   @map("totp_secret")
+  lastLoginAt        DateTime? @map("last_login_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  defaultFeeLevel          FeeLevel?          @relation(fields: [defaultFeeLevelId], references: [id])
+  clientsCreated           Client[]           @relation("ClientCreatedBy")
+  mattersOwned             Matter[]           @relation("MatterOwner")
+  mattersCreated           Matter[]           @relation("MatterCreatedBy")
+  matterUsers              MatterUser[]       @relation("MatterUserAccess")
+  matterUserGrants         MatterUser[]       @relation("MatterUserGrantedBy")
+  ficaUploads              FicaDocument[]     @relation("FicaUploadedBy")
+  matterAttachments        MatterAttachment[] @relation("AttachmentUploadedBy")
+  matterNotes              MatterNote[]       @relation("NoteCreatedBy")
+  diaryAssigned            DiaryEntry[]       @relation("DiaryAssignedTo")
+  diaryCreated             DiaryEntry[]       @relation("DiaryCreatedBy")
+  feeEntriesEarned         FeeEntry[]         @relation("FeeEntryEarner")
+  feeEntriesCreated        FeeEntry[]         @relation("FeeEntryCreatedBy")
+  feeEntriesCaptured       FeeEntry[]         @relation("FeeEntryCapturer")
+  investmentEntriesCreated InvestmentEntry[]  @relation("InvestmentEntryCreatedBy")
+  invoicesCreated          Invoice[]          @relation("InvoiceCreatedBy")
+  suppliersCreated         Supplier[]         @relation("SupplierCreatedBy")
+  trustEntriesCreated      TrustEntry[]       @relation("TrustEntryCreatedBy")
+  businessEntriesCreated   BusinessEntry[]    @relation("BusinessEntryCreatedBy")
+  bankStatementsImported   BankStatement[]    @relation("StatementImporter")
+  bankMatches              BankMatch[]        @relation("BankMatchCreator")
 
   @@map("users")
 }
@@ -91,19 +114,19 @@ model FirmSettings {
 }
 
 model FirmOffice {
-  id             String       @id @default(uuid())
-  firmSettingsId String       @map("firm_settings_id")
+  id             String  @id @default(uuid())
+  firmSettingsId String  @map("firm_settings_id")
   label          String
-  addressLine1   String?      @map("address_line_1")
-  addressLine2   String?      @map("address_line_2")
+  addressLine1   String? @map("address_line_1")
+  addressLine2   String? @map("address_line_2")
   city           String?
   province       String?
-  postalCode     String?      @map("postal_code")
+  postalCode     String? @map("postal_code")
   tel            String?
   email          String?
   website        String?
-  isPrimary      Boolean      @default(false) @map("is_primary")
-  sortOrder      Int          @default(0) @map("sort_order")
+  isPrimary      Boolean @default(false) @map("is_primary")
+  sortOrder      Int     @default(0) @map("sort_order")
 
   firmSettings FirmSettings @relation(fields: [firmSettingsId], references: [id])
 
@@ -118,7 +141,8 @@ model FeeLevel {
   sortOrder       Int      @default(0) @map("sort_order")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  users User[]
+  users   User[]
+  matters Matter[]
 
   @@map("fee_levels")
 }
@@ -131,6 +155,18 @@ model PostingCode {
   isActive        Boolean @default(true) @map("is_active")
   sortOrder       Int     @default(0) @map("sort_order")
 
+  // LP-parity fields
+  categoryId            String?  @map("category_id")
+  departmentId          String?  @map("department_id")
+  unitType              UnitType @default(time) @map("unit_type")
+  defaultUnitPriceCents Int?     @map("default_unit_price_cents")
+  taxTypeId             String?  @map("tax_type_id")
+  glAccountId           String?  @map("gl_account_id")
+
+  category   PostingCodeCategory? @relation(fields: [categoryId], references: [id])
+  department Department?          @relation(fields: [departmentId], references: [id])
+  taxType    TaxType?             @relation(fields: [taxTypeId], references: [id])
+  glAccount  GlAccount?           @relation("PostingCodeGlAccount", fields: [glAccountId], references: [id])
   feeEntries FeeEntry[]
 
   @@map("posting_codes")
@@ -148,11 +184,11 @@ model MatterType {
 }
 
 model FeeScheduleCategory {
-  id           String            @id @default(uuid())
+  id           String   @id @default(uuid())
   name         String
   jurisdiction String
-  currency     String            @default("ZAR")
-  createdAt    DateTime          @default(now()) @map("created_at")
+  currency     String   @default("ZAR")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   items FeeScheduleItem[]
 
@@ -160,16 +196,16 @@ model FeeScheduleCategory {
 }
 
 model FeeScheduleItem {
-  id                   String              @id @default(uuid())
-  categoryId           String              @map("category_id")
+  id                   String   @id @default(uuid())
+  categoryId           String   @map("category_id")
   section              String
   description          String
-  officialFeeCents     Int                 @default(0) @map("official_fee_cents")
-  professionalFeeCents Int                 @map("professional_fee_cents")
-  vatRate              Decimal             @default(0.15) @map("vat_rate")
-  isActive             Boolean             @default(true) @map("is_active")
-  sortOrder            Int?                @map("sort_order")
-  createdAt            DateTime            @default(now()) @map("created_at")
+  officialFeeCents     Int      @default(0) @map("official_fee_cents")
+  professionalFeeCents Int      @map("professional_fee_cents")
+  vatRate              Decimal  @default(0.15) @map("vat_rate")
+  isActive             Boolean  @default(true) @map("is_active")
+  sortOrder            Int?     @map("sort_order")
+  createdAt            DateTime @default(now()) @map("created_at")
 
   category FeeScheduleCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
@@ -182,9 +218,168 @@ model Department {
   isActive  Boolean @default(true) @map("is_active")
   sortOrder Int     @default(0) @map("sort_order")
 
-  matters Matter[]
+  matters               Matter[]
+  clients               Client[]
+  postingCodes          PostingCode[]
+  postingCodeCategories PostingCodeCategory[]
 
   @@map("departments")
+}
+
+// ─── LP-parity: new master-data tables ──────────────────────────────────────
+
+model Currency {
+  id        String  @id @default(uuid())
+  code      String  @unique
+  name      String
+  symbol    String?
+  isDefault Boolean @default(false) @map("is_default")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  clients Client[]
+
+  @@map("currencies")
+}
+
+model TaxType {
+  id        String          @id @default(uuid())
+  code      String          @unique
+  name      String
+  ratePct   Decimal         @default(0) @map("rate_pct") @db.Decimal(6, 4)
+  category  TaxTypeCategory @default(sales)
+  isActive  Boolean         @default(true) @map("is_active")
+  sortOrder Int             @default(0) @map("sort_order")
+
+  clients      Client[]
+  postingCodes PostingCode[]
+
+  @@map("tax_types")
+}
+
+model PostingCodeCategory {
+  id                  String  @id @default(uuid())
+  name                String
+  code                String? @unique
+  parentId            String? @map("parent_id")
+  glAccountId         String? @map("gl_account_id")
+  unbilledGlAccountId String? @map("unbilled_gl_account_id")
+  departmentId        String? @map("department_id")
+
+  parent            PostingCodeCategory?  @relation("PostingCodeCategoryParent", fields: [parentId], references: [id])
+  children          PostingCodeCategory[] @relation("PostingCodeCategoryParent")
+  glAccount         GlAccount?            @relation("PostingCategoryGlAccount", fields: [glAccountId], references: [id])
+  unbilledGlAccount GlAccount?            @relation("PostingCategoryUnbilledGlAccount", fields: [unbilledGlAccountId], references: [id])
+  department        Department?           @relation(fields: [departmentId], references: [id])
+  postingCodes      PostingCode[]
+
+  @@map("posting_code_categories")
+}
+
+model GlAccountCategory {
+  id        String  @id @default(uuid())
+  name      String
+  code      String? @unique
+  parentId  String? @map("parent_id")
+  isSystem  Boolean @default(false) @map("is_system")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  parent     GlAccountCategory?  @relation("GlCategoryParent", fields: [parentId], references: [id])
+  children   GlAccountCategory[] @relation("GlCategoryParent")
+  glAccounts GlAccount[]
+
+  @@map("gl_account_categories")
+}
+
+model ReceiptMethod {
+  id            String  @id @default(uuid())
+  name          String  @unique
+  bankAccountId String? @map("bank_account_id")
+  btiCode       String? @map("bti_code") // "B" | "T" | "I"
+  disabled      Boolean @default(false)
+  sortOrder     Int     @default(0) @map("sort_order")
+
+  bankAccount BankAccount? @relation(fields: [bankAccountId], references: [id])
+
+  @@map("receipt_methods")
+}
+
+model SupplierType {
+  id        String  @id @default(uuid())
+  name      String  @unique
+  isActive  Boolean @default(true) @map("is_active")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  suppliers Supplier[]
+
+  @@map("supplier_types")
+}
+
+model Contact {
+  id              String    @id @default(uuid())
+  clientId        String?   @map("client_id")
+  title           String?
+  firstName       String?   @map("first_name")
+  surname         String?
+  salutation      String?
+  birthdate       DateTime? @db.Date
+  email           String?
+  website         String?
+  cell            String?
+  workPhone       String?   @map("work_phone")
+  directPhone     String?   @map("direct_phone")
+  homePhone       String?   @map("home_phone")
+  fax             String?
+  companyName     String?   @map("company_name")
+  jobTitle        String?   @map("job_title")
+  idNumber        String?   @map("id_number")
+  passportNumber  String?   @map("passport_number")
+  nationality     String?
+  taxNumber       String?   @map("tax_number")
+  vatNumber       String?   @map("vat_number")
+  physicalAddress String?   @map("physical_address")
+  postalAddress   String?   @map("postal_address")
+  employerAddress String?   @map("employer_address")
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  client Client? @relation(fields: [clientId], references: [id])
+
+  @@index([clientId])
+  @@map("contacts")
+}
+
+model BankAccount {
+  id            String          @id @default(uuid())
+  code          String          @unique
+  name          String
+  accountType   BankAccountType @map("account_type")
+  bankName      String?         @map("bank_name")
+  accountNumber String?         @map("account_number")
+  branchCode    String?         @map("branch_code")
+  swift         String?
+  currencyCode  String?         @default("ZAR") @map("currency_code")
+  btiCode       String?         @map("bti_code") // "B" | "T" | "I"
+  isActive      Boolean         @default(true) @map("is_active")
+  sortOrder     Int             @default(0) @map("sort_order")
+
+  receiptMethods ReceiptMethod[]
+
+  @@map("bank_accounts")
+}
+
+model CannedNarration {
+  id             String           @id @default(uuid())
+  searchTrigger  String           @map("search_trigger")
+  value          String
+  context        NarrationContext @default(fee_disb_narrations)
+  allDepartments Boolean          @default(true) @map("all_departments")
+  allMatterTypes Boolean          @default(true) @map("all_matter_types")
+  isActive       Boolean          @default(true) @map("is_active")
+  sortOrder      Int              @default(0) @map("sort_order")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  @@map("canned_narrations")
 }
 
 enum EntityType {
@@ -205,38 +400,64 @@ enum FicaStatus {
 }
 
 model Client {
-  id                    String     @id @default(uuid())
-  clientCode            String     @unique @map("client_code")
-  clientName            String     @map("client_name")
-  entityType            EntityType @map("entity_type")
-  emailGeneral          String?    @map("email_general")
-  emailInvoices         String?    @map("email_invoices")
-  emailStatements       String?    @map("email_statements")
-  tel                   String?
-  mobile                String?
-  physicalAddressLine1  String?    @map("physical_address_line_1")
-  physicalAddressLine2  String?    @map("physical_address_line_2")
-  physicalCity          String?    @map("physical_city")
-  physicalProvince      String?    @map("physical_province")
-  physicalPostalCode    String?    @map("physical_postal_code")
-  postalAddressLine1    String?    @map("postal_address_line_1")
-  postalAddressLine2    String?    @map("postal_address_line_2")
-  postalCity            String?    @map("postal_city")
-  postalProvince        String?    @map("postal_province")
-  postalPostalCode      String?    @map("postal_postal_code")
-  vatNumber             String?    @map("vat_number")
-  ficaStatus            FicaStatus @default(not_compliant) @map("fica_status")
-  ficaNotes             String?    @map("fica_notes")
-  ficaLastUpdatedAt     DateTime?  @map("fica_last_updated_at")
-  isActive              Boolean    @default(true) @map("is_active")
-  createdById           String     @map("created_by")
-  createdAt             DateTime   @default(now()) @map("created_at")
-  updatedAt             DateTime   @updatedAt @map("updated_at")
+  id                   String     @id @default(uuid())
+  clientCode           String     @unique @map("client_code")
+  clientName           String     @map("client_name")
+  entityType           EntityType @map("entity_type")
+  emailGeneral         String?    @map("email_general")
+  emailInvoices        String?    @map("email_invoices")
+  emailStatements      String?    @map("email_statements")
+  tel                  String?
+  mobile               String?
+  physicalAddressLine1 String?    @map("physical_address_line_1")
+  physicalAddressLine2 String?    @map("physical_address_line_2")
+  physicalCity         String?    @map("physical_city")
+  physicalProvince     String?    @map("physical_province")
+  physicalPostalCode   String?    @map("physical_postal_code")
+  postalAddressLine1   String?    @map("postal_address_line_1")
+  postalAddressLine2   String?    @map("postal_address_line_2")
+  postalCity           String?    @map("postal_city")
+  postalProvince       String?    @map("postal_province")
+  postalPostalCode     String?    @map("postal_postal_code")
+  vatNumber            String?    @map("vat_number")
+  ficaStatus           FicaStatus @default(not_compliant) @map("fica_status")
+  ficaNotes            String?    @map("fica_notes")
+  ficaLastUpdatedAt    DateTime?  @map("fica_last_updated_at")
+  isActive             Boolean    @default(true) @map("is_active")
+  createdById          String     @map("created_by")
+  createdAt            DateTime   @default(now()) @map("created_at")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
+
+  // LP-parity fields
+  tradingAs     String? @map("trading_as")
+  regNumber     String? @map("reg_number")
+  idNumber      String? @map("id_number")
+  title         String?
+  firstName     String? @map("first_name")
+  surname       String?
+  taxNumber     String? @map("tax_number")
+  fax           String?
+  website       String?
+  sector        String?
+  notes         String?
+  creditTerms   String? @map("credit_terms")
+  bankName      String? @map("bank_name")
+  bankAccount   String? @map("bank_account")
+  bankBranch    String? @map("bank_branch")
+  currencyId    String? @map("currency_id")
+  taxTypeId     String? @map("tax_type_id")
+  clientRef     String? @map("client_ref")
+  accountNumber String? @map("account_number")
+  departmentId  String? @map("department_id")
 
   createdBy     User           @relation("ClientCreatedBy", fields: [createdById], references: [id])
+  currency      Currency?      @relation(fields: [currencyId], references: [id])
+  taxType       TaxType?       @relation(fields: [taxTypeId], references: [id])
+  department    Department?    @relation(fields: [departmentId], references: [id])
   ficaDocuments FicaDocument[]
   matters       Matter[]
   invoices      Invoice[]
+  contacts      Contact[]
 
   @@map("clients")
 }
@@ -286,44 +507,63 @@ enum NoteSource {
 }
 
 model Matter {
-  id           String       @id @default(uuid())
-  matterCode   String       @unique @map("matter_code")
-  clientId     String       @map("client_id")
-  description  String
-  matterTypeId String?      @map("matter_type_id")
-  departmentId String?      @map("department_id")
-  ownerId      String       @map("owner_id")
-  status       MatterStatus @default(open)
-  dateOpened   DateTime     @default(now()) @map("date_opened")
-  dateClosed   DateTime?    @map("date_closed")
-  notes        String?
+  id               String        @id @default(uuid())
+  matterCode       String        @unique @map("matter_code")
+  clientId         String        @map("client_id")
+  description      String
+  matterTypeId     String?       @map("matter_type_id")
+  departmentId     String?       @map("department_id")
+  ownerId          String        @map("owner_id")
+  status           MatterStatus  @default(open)
+  dateOpened       DateTime      @default(now()) @map("date_opened")
+  dateClosed       DateTime?     @map("date_closed")
+  notes            String?
   // Practice Notes fields
-  matterStatusNote String?      @map("matter_status_note")
-  toDo             Json?        @map("to_do")
+  matterStatusNote String?       @map("matter_status_note")
+  toDo             Json?         @map("to_do")
   allocation       String?
   comment          String?
   billingStatus    BillingStatus @default(not_yet_billed) @map("billing_status")
-  loeFicaDone      Boolean      @default(false) @map("loe_fica_done")
-  createdById  String       @map("created_by")
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
+  loeFicaDone      Boolean       @default(false) @map("loe_fica_done")
+  createdById      String        @map("created_by")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
 
-  client       Client              @relation(fields: [clientId], references: [id])
-  matterType   MatterType?         @relation(fields: [matterTypeId], references: [id])
-  department   Department?         @relation(fields: [departmentId], references: [id])
-  owner        User                @relation("MatterOwner", fields: [ownerId], references: [id])
-  createdBy    User                @relation("MatterCreatedBy", fields: [createdById], references: [id])
-  matterUsers  MatterUser[]
-  attachments  MatterAttachment[]
-  matterNotes  MatterNote[]
-  diaryEntries DiaryEntry[]
-  feeEntries   FeeEntry[]
-  invoices     Invoice[]
-  associatedAs    MatterAssociation[] @relation("PrimaryMatter")
-  associations    MatterAssociation[] @relation("AssociatedMatter")
-  trustEntries    TrustEntry[]
-  businessEntries BusinessEntry[]
-  journalLines    JournalLine[]
+  // LP-parity fields
+  clientRef              String? @map("client_ref")
+  accountNumber          String? @map("account_number")
+  restricted             Boolean @default(false)
+  billingEntityOverride  String? @map("billing_entity_override")
+  defaultDiscountPercent Int     @default(0) @map("default_discount_percent")
+  feeLevelId             String? @map("fee_level_id")
+  investmentName         String? @map("investment_name")
+  claimAmountCents       Int?    @map("claim_amount_cents")
+  reserveTrust           String? @map("reserve_trust")
+  feeCapCents            Int?    @map("fee_cap_cents")
+  feeCapPeriod           String? @map("fee_cap_period")
+  taxNumber              String? @map("tax_number")
+  cssClass               String? @map("css_class")
+  email                  String?
+  accountsEmail          String? @map("accounts_email")
+
+  client            Client              @relation(fields: [clientId], references: [id])
+  matterType        MatterType?         @relation(fields: [matterTypeId], references: [id])
+  department        Department?         @relation(fields: [departmentId], references: [id])
+  owner             User                @relation("MatterOwner", fields: [ownerId], references: [id])
+  feeLevel          FeeLevel?           @relation(fields: [feeLevelId], references: [id])
+  createdBy         User                @relation("MatterCreatedBy", fields: [createdById], references: [id])
+  matterUsers       MatterUser[]
+  attachments       MatterAttachment[]
+  matterNotes       MatterNote[]
+  diaryEntries      DiaryEntry[]
+  feeEntries        FeeEntry[]
+  invoices          Invoice[]
+  associatedAs      MatterAssociation[] @relation("PrimaryMatter")
+  associations      MatterAssociation[] @relation("AssociatedMatter")
+  trustEntries      TrustEntry[]
+  businessEntries   BusinessEntry[]
+  investmentEntries InvestmentEntry[]
+  journalLines      JournalLine[]
 
   @@map("matters")
 }
@@ -381,9 +621,9 @@ model MatterNote {
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
 
-  matter     Matter    @relation(fields: [matterId], references: [id], onDelete: Cascade)
-  createdBy  User      @relation("NoteCreatedBy", fields: [createdById], references: [id])
-  feeEntry   FeeEntry? @relation(fields: [feeEntryId], references: [id], onDelete: SetNull)
+  matter    Matter    @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  createdBy User      @relation("NoteCreatedBy", fields: [createdById], references: [id])
+  feeEntry  FeeEntry? @relation(fields: [feeEntryId], references: [id], onDelete: SetNull)
 
   @@map("matter_notes")
 }
@@ -418,45 +658,52 @@ enum FeeEntryType {
 }
 
 model FeeEntry {
-  id                    String       @id @default(uuid())
-  matterId              String       @map("matter_id")
-  entryType             FeeEntryType @map("entry_type")
-  entryDate             DateTime     @map("entry_date") @db.Date
-  narration             String
+  id        String       @id @default(uuid())
+  matterId  String       @map("matter_id")
+  entryType FeeEntryType @map("entry_type")
+  entryDate DateTime     @map("entry_date") @db.Date
+  narration String
 
   // Time entries
-  durationMinutesRaw    Int?         @map("duration_minutes_raw")
-  durationMinutesBilled Int?         @map("duration_minutes_billed")
+  durationMinutesRaw    Int? @map("duration_minutes_raw")
+  durationMinutesBilled Int? @map("duration_minutes_billed")
 
   // Unitary entries (stored as integer thousandths, e.g. 2500 = 2.500 units)
-  unitQuantityThousandths Int?       @map("unit_quantity_thousandths")
+  unitQuantityThousandths Int? @map("unit_quantity_thousandths")
 
   // Financials (all cents)
-  rateCents             Int          @map("rate_cents")
-  amountCents           Int          @map("amount_cents")
-  discountPct           Int          @default(0) @map("discount_pct")
-  discountCents         Int          @default(0) @map("discount_cents")
-  totalCents            Int          @map("total_cents")
+  rateCents     Int @map("rate_cents")
+  amountCents   Int @map("amount_cents")
+  discountPct   Int @default(0) @map("discount_pct")
+  discountCents Int @default(0) @map("discount_cents")
+  totalCents    Int @map("total_cents")
 
-  isBillable            Boolean      @default(true) @map("is_billable")
-  isInvoiced            Boolean      @default(false) @map("is_invoiced")
+  isBillable Boolean @default(true) @map("is_billable")
+  isInvoiced Boolean @default(false) @map("is_invoiced")
 
   // Receipt attachment (disbursements)
-  receiptFileName       String?      @map("receipt_file_name")
-  receiptFilePath       String?      @map("receipt_file_path")
+  receiptFileName String? @map("receipt_file_name")
+  receiptFilePath String? @map("receipt_file_path")
 
-  postingCodeId         String?      @map("posting_code_id")
-  feeEarnerId           String       @map("fee_earner_id")
-  createdById           String       @map("created_by_id")
-  isHistorical          Boolean      @default(false) @map("is_historical")
-  feeEarnerName         String?      @map("fee_earner_name")
-  createdAt             DateTime     @default(now()) @map("created_at")
-  updatedAt             DateTime     @updatedAt @map("updated_at")
+  postingCodeId String? @map("posting_code_id")
+  feeEarnerId   String  @map("fee_earner_id")
+  createdById   String  @map("created_by_id")
+  capturerId    String? @map("capturer_id")
+  isHistorical  Boolean @default(false) @map("is_historical")
+  feeEarnerName String? @map("fee_earner_name")
+
+  // LP-parity fields
+  vatFlag   VatFlag?  @map("vat_flag")
+  stampDate DateTime? @map("stamp_date")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   matter      Matter       @relation(fields: [matterId], references: [id])
   postingCode PostingCode? @relation(fields: [postingCodeId], references: [id])
   feeEarner   User         @relation("FeeEntryEarner", fields: [feeEarnerId], references: [id])
   createdBy   User         @relation("FeeEntryCreatedBy", fields: [createdById], references: [id])
+  capturer    User?        @relation("FeeEntryCapturer", fields: [capturerId], references: [id])
   matterNotes MatterNote[]
 
   @@index([matterId])
@@ -470,6 +717,7 @@ model FeeEntry {
 enum InvoiceType {
   pro_forma
   invoice
+  credit_note
 }
 
 enum InvoiceStatus {
@@ -486,49 +734,55 @@ model Invoice {
   invoiceType   InvoiceType   @map("invoice_type")
   status        InvoiceStatus @default(draft_pro_forma)
 
-  matterId      String        @map("matter_id")
-  clientId      String        @map("client_id")
+  matterId String @map("matter_id")
+  clientId String @map("client_id")
 
   // Immutable snapshots captured at creation
-  matterCode          String  @map("matter_code")
-  matterDescription   String  @map("matter_description")
-  clientName          String  @map("client_name")
-  clientEmail         String? @map("client_email")
-  firmName            String  @map("firm_name")
-  firmAddress         String? @map("firm_address")
-  firmTel             String? @map("firm_tel")
-  firmEmail           String? @map("firm_email")
-  firmWebsite         String? @map("firm_website")
-  vatRegistered       Boolean @map("vat_registered")
-  vatRateBps          Int     @map("vat_rate_bps")
-  vatRegNumber        String? @map("vat_reg_number")
-  trustBankName       String? @map("trust_bank_name")
-  trustBankAccountName     String? @map("trust_bank_account_name")
-  trustBankAccountNumber   String? @map("trust_bank_account_number")
-  trustBankBranchCode      String? @map("trust_bank_branch_code")
-  trustBankSwift           String? @map("trust_bank_swift")
+  matterCode                 String  @map("matter_code")
+  matterDescription          String  @map("matter_description")
+  clientName                 String  @map("client_name")
+  clientEmail                String? @map("client_email")
+  firmName                   String  @map("firm_name")
+  firmAddress                String? @map("firm_address")
+  firmTel                    String? @map("firm_tel")
+  firmEmail                  String? @map("firm_email")
+  firmWebsite                String? @map("firm_website")
+  vatRegistered              Boolean @map("vat_registered")
+  vatRateBps                 Int     @map("vat_rate_bps")
+  vatRegNumber               String? @map("vat_reg_number")
+  trustBankName              String? @map("trust_bank_name")
+  trustBankAccountName       String? @map("trust_bank_account_name")
+  trustBankAccountNumber     String? @map("trust_bank_account_number")
+  trustBankBranchCode        String? @map("trust_bank_branch_code")
+  trustBankSwift             String? @map("trust_bank_swift")
   invoicePaymentInstructions String? @map("invoice_payment_instructions")
 
   // Financials
-  subTotalCents Int     @map("sub_total_cents")
-  vatCents      Int     @default(0) @map("vat_cents")
-  totalCents    Int     @map("total_cents")
+  subTotalCents Int @map("sub_total_cents")
+  vatCents      Int @default(0) @map("vat_cents")
+  totalCents    Int @map("total_cents")
 
-  invoiceDate   DateTime  @map("invoice_date") @db.Date
-  sentAt        DateTime? @map("sent_at")
-  paidAt        DateTime? @map("paid_at")
-  paidNote      String?   @map("paid_note")
+  invoiceDate DateTime  @map("invoice_date") @db.Date
+  sentAt      DateTime? @map("sent_at")
+  paidAt      DateTime? @map("paid_at")
+  paidNote    String?   @map("paid_note")
 
-  isHistorical  Boolean   @default(false) @map("is_historical")
+  isHistorical Boolean @default(false) @map("is_historical")
 
-  createdById   String    @map("created_by_id")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  // LP-parity fields
+  originalInvoiceId String? @map("original_invoice_id") // for credit_note → original invoice
+  lpPdfUrl          String? @map("lp_pdf_url") // archived PDF from LP
 
-  matter    Matter          @relation(fields: [matterId], references: [id])
-  client    Client          @relation(fields: [clientId], references: [id])
-  createdBy User            @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
-  lineItems InvoiceLineItem[]
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  matter          Matter            @relation(fields: [matterId], references: [id])
+  client          Client            @relation(fields: [clientId], references: [id])
+  createdBy       User              @relation("InvoiceCreatedBy", fields: [createdById], references: [id])
+  originalInvoice Invoice?          @relation("InvoiceCreditNotes", fields: [originalInvoiceId], references: [id])
+  creditNotes     Invoice[]         @relation("InvoiceCreditNotes")
+  lineItems       InvoiceLineItem[]
 
   @@index([matterId])
   @@index([clientId])
@@ -539,20 +793,39 @@ model Invoice {
 // ─── Phase 5: Trust & Business Bookkeeping ───────────────────────────────────
 
 model Supplier {
-  id            String   @id @default(uuid())
-  name          String
-  contactName   String?  @map("contact_name")
-  email         String?
-  tel           String?
-  vatNumber     String?  @map("vat_number")
-  isActive      Boolean  @default(true) @map("is_active")
-  createdById   String   @map("created_by_id")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(uuid())
+  name        String
+  contactName String?  @map("contact_name")
+  email       String?
+  tel         String?
+  vatNumber   String?  @map("vat_number")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  createdBy       User            @relation("SupplierCreatedBy", fields: [createdById], references: [id])
-  trustEntries    TrustEntry[]
-  businessEntries BusinessEntry[]
+  // LP-parity fields
+  supplierCode     String? @unique @map("supplier_code")
+  supplierTypeId   String? @map("supplier_type_id")
+  defaultAccountId String? @map("default_account_id")
+  tradingAs        String? @map("trading_as")
+  regNumber        String? @map("reg_number")
+  taxNumber        String? @map("tax_number")
+  fax              String?
+  physicalAddress  String? @map("physical_address")
+  postalAddress    String? @map("postal_address")
+  creditDays       Int?    @map("credit_days")
+  bankName         String? @map("bank_name")
+  bankAccount      String? @map("bank_account")
+  bankBranch       String? @map("bank_branch")
+  notes            String?
+
+  createdBy         User              @relation("SupplierCreatedBy", fields: [createdById], references: [id])
+  supplierType      SupplierType?     @relation(fields: [supplierTypeId], references: [id])
+  defaultAccount    GlAccount?        @relation("SupplierDefaultAccount", fields: [defaultAccountId], references: [id])
+  trustEntries      TrustEntry[]
+  businessEntries   BusinessEntry[]
+  investmentEntries InvestmentEntry[]
 
   @@map("suppliers")
 }
@@ -605,28 +878,54 @@ enum BusinessEntryType {
 }
 
 model BusinessEntry {
-  id              String            @id @default(uuid())
-  matterId        String?           @map("matter_id") // nullable for firm-overhead entries
-  entryType       BusinessEntryType @map("entry_type")
-  entryDate       DateTime          @map("entry_date") @db.Date
-  amountCents     Int               @map("amount_cents") // always positive
-  narration       String
-  referenceNumber String?           @map("reference_number")
-  supplierId      String?           @map("supplier_id")
-  linkedTrustEntryId String?        @map("linked_trust_entry_id")
-  createdById     String            @map("created_by_id")
-  createdAt       DateTime          @default(now()) @map("created_at")
-  updatedAt       DateTime          @updatedAt @map("updated_at")
+  id                 String            @id @default(uuid())
+  matterId           String?           @map("matter_id") // nullable for firm-overhead entries
+  entryType          BusinessEntryType @map("entry_type")
+  entryDate          DateTime          @map("entry_date") @db.Date
+  amountCents        Int               @map("amount_cents") // always positive
+  narration          String
+  referenceNumber    String?           @map("reference_number")
+  supplierId         String?           @map("supplier_id")
+  linkedTrustEntryId String?           @map("linked_trust_entry_id")
+  createdById        String            @map("created_by_id")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
 
-  matter        Matter?        @relation(fields: [matterId], references: [id])
-  supplier      Supplier?      @relation(fields: [supplierId], references: [id])
-  createdBy     User           @relation("BusinessEntryCreatedBy", fields: [createdById], references: [id])
+  matter         Matter?        @relation(fields: [matterId], references: [id])
+  supplier       Supplier?      @relation(fields: [supplierId], references: [id])
+  createdBy      User           @relation("BusinessEntryCreatedBy", fields: [createdById], references: [id])
   journalEntries JournalEntry[]
-  bankMatches   BankMatch[]
+  bankMatches    BankMatch[]
 
   @@index([matterId])
   @@index([entryDate])
   @@map("business_entries")
+}
+
+model InvestmentEntry {
+  id              String              @id @default(uuid())
+  matterId        String              @map("matter_id")
+  entryType       InvestmentEntryType @map("entry_type")
+  entryDate       DateTime            @map("entry_date") @db.Date
+  amountCents     Int                 @map("amount_cents") // always positive
+  narration       String
+  referenceNumber String?             @map("reference_number")
+  investmentName  String?             @map("investment_name") // bank/product descriptor
+  supplierId      String?             @map("supplier_id")
+  linkedEntryId   String?             @unique @map("linked_entry_id")
+  createdById     String              @map("created_by_id")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  matter      Matter            @relation(fields: [matterId], references: [id])
+  supplier    Supplier?         @relation(fields: [supplierId], references: [id])
+  createdBy   User              @relation("InvestmentEntryCreatedBy", fields: [createdById], references: [id])
+  linkedEntry InvestmentEntry?  @relation("InvestmentTransferLink", fields: [linkedEntryId], references: [id])
+  linkedFrom  InvestmentEntry[] @relation("InvestmentTransferLink")
+
+  @@index([matterId])
+  @@index([entryDate])
+  @@map("investment_entries")
 }
 
 // ─── Phase 5: General Ledger (Double-Entry) ───────────────────────────────────
@@ -648,7 +947,18 @@ model GlAccount {
   isActive    Boolean       @default(true) @map("is_active")
   sortOrder   Int           @default(0) @map("sort_order")
 
-  journalLines JournalLine[]
+  // LP-parity fields
+  categoryId          String? @map("category_id")
+  feeEarnerId         String? @map("fee_earner_id") // LP attaches fee-earner to some income accounts
+  openingBalanceCents Int     @default(0) @map("opening_balance_cents")
+  flag                String? // LP flag letter: A/L/E/I/D/C
+
+  category                GlAccountCategory?    @relation(fields: [categoryId], references: [id])
+  journalLines            JournalLine[]
+  postingCodes            PostingCode[]         @relation("PostingCodeGlAccount")
+  postingCategoryPrimary  PostingCodeCategory[] @relation("PostingCategoryGlAccount")
+  postingCategoryUnbilled PostingCodeCategory[] @relation("PostingCategoryUnbilledGlAccount")
+  suppliersDefault        Supplier[]            @relation("SupplierDefaultAccount")
 
   @@map("gl_accounts")
 }
@@ -694,6 +1004,15 @@ model JournalLine {
 enum BankAccountType {
   trust
   business
+  investment
+}
+
+enum InvestmentEntryType {
+  investment_receipt
+  investment_payment
+  investment_interest
+  investment_transfer_in
+  investment_transfer_out
 }
 
 model BankStatement {
@@ -753,8 +1072,8 @@ model BankMatch {
 }
 
 model InvoiceLineItem {
-  id          String   @id @default(uuid())
-  invoiceId   String   @map("invoice_id")
+  id        String @id @default(uuid())
+  invoiceId String @map("invoice_id")
 
   // Snapshot of the fee entry (feeEntryId is informational only — not a FK)
   feeEntryId  String?  @map("fee_entry_id")
@@ -766,13 +1085,13 @@ model InvoiceLineItem {
   durationMinutesBilled   Int? @map("duration_minutes_billed")
   unitQuantityThousandths Int? @map("unit_quantity_thousandths")
 
-  rateCents     Int  @map("rate_cents")
-  amountCents   Int  @map("amount_cents")
-  discountPct   Int  @default(0) @map("discount_pct")
-  discountCents Int  @default(0) @map("discount_cents")
-  totalCents    Int  @map("total_cents")
+  rateCents     Int @map("rate_cents")
+  amountCents   Int @map("amount_cents")
+  discountPct   Int @default(0) @map("discount_pct")
+  discountCents Int @default(0) @map("discount_cents")
+  totalCents    Int @map("total_cents")
 
-  sortOrder     Int  @default(0) @map("sort_order")
+  sortOrder Int @default(0) @map("sort_order")
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
