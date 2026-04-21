@@ -125,3 +125,51 @@ Every route imports `auth.ts` + `prisma.ts`. Additional specialized imports:
 **components/dashboard/dashboard-shell.tsx** → must be updated when adding/removing any dashboard widget
 
 **components/matters/matter-detail.tsx** → highest fan-out component; imports from matters, time-recording, bookkeeping. Changes to any of those features may require updates here.
+
+## LP-parity tables (added 2026-04-20)
+
+10 new master-data tables match LawPracticeZA's data model so historical data can be imported with full fidelity. All schema changes are additive — no existing column was dropped or renamed.
+
+| Table | Purpose | Populated from |
+|---|---|---|
+| `currencies` | Multi-currency support (ZAR default) | LP `List_product` (currency cols) |
+| `tax_types` | VAT/tax categorisation per posting code (e.g. TT_120 "Not Registered") | LP `List_product` (taxtype cols) |
+| `posting_code_categories` | Groups posting codes (Fees, Disbursements) with default GL account | LP `List_productcategory` |
+| `gl_account_categories` | GL account grouping (Assets, Liabilities, Equity, Income, Expenses) | LP `List_accountcategory` |
+| `receipt_methods` | Cash/EFT methods linked to bank accounts | LP `List_customerpaymentmethod` |
+| `bank_accounts` | Trust/Business/Investment bank accounts (replaces hardcoded FirmSettings) | LP bank screenshot + FirmSettings |
+| `supplier_types` | Categorises suppliers (advocates, sheriffs, etc.) | LP `List_suppliertype` |
+| `contacts` | Per-client contact persons separate from main client record | LP `List_contact` |
+| `canned_narrations` | Pre-built narration templates by context | LP `List_cannednarration` |
+| `investment_entries` | Investment-ledger transactions (Section 86(4) accounts) | LP investment ledger statements |
+
+New columns on existing tables (LP-parity):
+- `clients` + 20 cols: trading_as, reg_number, id_number, title/first_name/surname, tax_number, fax, website, sector, notes, credit_terms, bank_*, currency_id, tax_type_id, client_ref, account_number, department_id
+- `matters` + 15 cols: client_ref, account_number, restricted, billing_entity_override, default_discount_percent, fee_level_id, investment_name, claim_amount_cents, reserve_trust, fee_cap_*, tax_number, css_class, email, accounts_email
+- `fee_entries` + 3 cols: vat_flag (Y/N enum), stamp_date (when entered, distinct from entry_date), capturer_id (FK to users — distinct from fee_earner_id)
+- `posting_codes` + 6 cols: category_id, department_id, unit_type (time/qty enum), default_unit_price_cents, tax_type_id, gl_account_id
+- `suppliers` + 14 cols: supplier_code (unique), supplier_type_id, default_account_id, trading_as, reg_number, tax_number, addresses, credit_days, bank_*
+- `invoices` + 2 cols: original_invoice_id (self-FK for credit_note → original), lp_pdf_url
+- `gl_accounts` + 4 cols: category_id, fee_earner_id, opening_balance_cents, flag
+
+Enum extensions:
+- `InvoiceType` += `credit_note`
+- `BankAccountType` += `investment`
+- New: `VatFlag` (Y/N), `UnitType` (time/qty), `TaxTypeCategory` (sales/purchase), `NarrationContext`, `InvestmentEntryType`
+
+## DB triggers (auto-generate journals on bookkeeping inserts)
+
+Three triggers fire on `trust_entries`/`business_entries` INSERT:
+- `trg_check_trust_balance` — blocks `trust_payment`/`trust_transfer_out` that would put a matter's trust balance below zero. **Disable during bulk historical imports** (e.g. `ALTER TABLE trust_entries DISABLE TRIGGER trg_check_trust_balance`).
+- `trg_gl_journal_trust` → `generate_gl_journal_for_trust()` — auto-creates `journal_entries` + `journal_lines` for receipts/payments (codes 1001, 2001). Skips inter-matter transfers (net GL effect = 0).
+- `trg_gl_journal_business` → `generate_gl_journal_for_business()` — same pattern for business side.
+
+When importing historical data, leave the GL-journal triggers ON so journals are created automatically; only the balance-check trigger needs disabling.
+
+## LP-import scripts (`scripts/phase*.mjs`)
+
+Single-shot reproducible scripts run via `node --env-file=.env.local scripts/phaseX-Y-name.mjs`. Each is idempotent (truncate-and-reimport for transactional, upsert for masterfile).
+
+Source files: `Documentation/Recon/*.xlsx` — original LP exports. `Documentation/Recon/PARITY.md` tracks row-count parity per phase. `Documentation/Recon/lp-user-mapping.md` documents the LP-login → Casey-user alias map used to attribute historical `created_by`.
+
+The `lp-import@dcco.law` user (role=admin, is_active=false) is the system attribution for any LP entry whose original poster doesn't map to a real Casey user (Chris Geale = LP vendor, Shaan Stander = external, System = LP auto-posts).
