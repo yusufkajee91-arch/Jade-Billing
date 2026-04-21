@@ -66,6 +66,47 @@ Total R1,916. Dates 2026-04-08 through 2026-04-13.
 - [x] Phase 6 — reconciliation passes: all three balances exact to the cent
 - [ ] Phase 7 — lock & document (CLAUDE.md, dataflow.md updates, is_historical enforcement)
 
+## Final audit (2026-04-21)
+
+Comprehensive Recon-folder audit at `scripts/audit-recon-vs-casey.mjs`.
+
+| Check | LP | Casey | Status |
+|---|---|---|---|
+| Clients | 369 | 372 | ✓ (Casey +3 native: KAI, MABC, ALZ, LUD) |
+| Matters | 562 | 569 | ✓ (Casey +3 Casey-only + 3 CLEARING + 1) |
+| Fee Levels | 8 | 8 | ✓ MATCH |
+| Posting Codes | 28 | 36 | ✓ (Casey +8 pre-existing) |
+| Posting Code Categories | 2 | 2 | ✓ MATCH |
+| GL Account Categories | 5 | 5 | ✓ MATCH |
+| Receipt Methods | 3 | 3 | ✓ MATCH |
+| Suppliers | 11 | 11 | ✓ MATCH |
+| Supplier Types | 0 | 0 | ✓ MATCH |
+| Contacts | 0 | 0 | ✓ MATCH |
+| Canned Narrations | 0 | 0 | ✓ MATCH |
+| Departments | 1 | 4 | ✓ (Casey richer structure) |
+| Users | 8 | 8 | ✓ MATCH |
+| Fee Earners | 2 | 5 | ✓ (Casey seed users retained) |
+| GL Accounts (distinct codes) | 41 | 49 | ✓ (Casey +8 seed accounts) |
+| **Fee entries** | 3,979 | 3,979 | **✓ EXACT** |
+| **Fee entries sum** | R5,881,558.39 | R5,881,558.39 | **✓ EXACT** |
+| **Invoices** | 388 | 388 | **✓ EXACT** (incl 27 credit_note + 361 invoice + others) |
+| **Invoice line items** | 3,223 | 3,223 | **✓ EXACT** |
+| **Trust closing balance** | R474,204.67 | R474,204.67 | **✓ EXACT** |
+| **Business closing balance** | R127,797.18 | R127,797.18 | **✓ EXACT** |
+| Trust entries | 1,170 | 1,166 | -4 (LP rows with no matter match) |
+| Trust transfer refs | 70 | 65 | -5 (TT1045/47/49/51/56 are orphan refs in LP itself — referenced in `List_trusttransfer.xlsx` but absent from Detailed Matter Ledger) |
+| Bank CASH transactions | 6 | 0 | -6 captured at GL level only; matter-level deferred (see caveat below) |
+| FICA compliant | 4 | 4 | ✓ MATCH |
+
+### Audit fixes applied (Phase 8)
+- Updated 27 invoice records (CN1001–CN1029) to `invoice_type='credit_note'` (were stored as `invoice` from the original Casey import).
+- Imported 7 missing INV records: INV1365, INV1366, INV1367, INV1368, INV1369, INV1371, INV1372 (created in LP after Casey's last sync).
+- 47 missing invoice line items now present (3,176 → 3,223).
+- Added `lp-import` user as `created_by` for all 7 imports.
+
+### Bank CASH caveat
+The R22,300 cash bank balance is captured at GL level (`gl_accounts.code='BANK_CASH'`, `opening_balance_cents=2,230,000`). The 6 underlying transactions (4 ZAR + 2 AUD foreign-currency) are NOT stored as `business_entries` because the auto-journal trigger (`generate_gl_journal_for_business`) defaults to BANK_bbank, which would double-count R22,300 against the business bank balance. To enable matter-level cash visibility, Casey's schema needs a `bank_account_id` column on `business_entries` and a multi-account-aware journal trigger.
+
 ## Reconciliation fix summary (Phase 6)
 
 The gaps resolved by fixing sign-aware type assignment:
