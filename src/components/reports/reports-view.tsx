@@ -47,7 +47,7 @@ const REPORTS: Report[] = [
   { id: 'income-expense', label: 'Income & Expense', description: 'Profit & loss for a period', adminOnly: true },
   { id: 'balance-sheet', label: 'Balance Sheet', description: 'Assets, liabilities & equity as at a date', adminOnly: true },
   { id: 'gl-detail', label: 'GL Account Detail', description: 'Per-account ledger with running balance', adminOnly: true },
-  { id: 'trust-register', label: 'Trust Register', description: 'Trust balances per matter' },
+  { id: 'trust-register', label: 'Trust Register', description: 'Trust balances per matter', adminOnly: true },
   { id: 'trust-investments', label: 'Trust & Investments', description: 'Trust balances as at a date (exportable)', adminOnly: true },
   { id: 'matter-ledger', label: 'Matter Trust Ledger', description: 'Trust audit trail per matter' },
   { id: 'debtors', label: 'Debtors Age Analysis', description: 'Outstanding invoices by age bucket' },
@@ -69,7 +69,7 @@ export function ReportsView({ isAdmin }: { isAdmin: boolean }) {
     switch (selected) {
       case 'trial-balance': return <TrialBalance />
       case 'general-journal': return <GeneralJournal />
-      case 'trust-register': return <TrustRegister />
+      case 'trust-register': return isAdmin ? <TrustRegister /> : null
       case 'debtors': return <DebtorsReport />
       case 'invoice-register': return <InvoiceRegister />
       case 'wip': return <WipReport />

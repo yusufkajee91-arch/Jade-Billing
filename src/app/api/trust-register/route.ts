@@ -17,6 +17,10 @@ export async function GET(request: NextRequest) {
       log.warn('GET rejected: unauthorised')
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
+    if (session.user.role !== 'admin') {
+      log.warn('GET rejected: forbidden', { role: session.user.role })
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const { searchParams } = new URL(request.url)
     const asAtParam = searchParams.get('asAt')

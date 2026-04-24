@@ -3,6 +3,11 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiLogger } from '@/lib/debug'
+import {
+  bucketBilledInvoicesByEarnerDay,
+  buildEarnerCumulativeData,
+  type BilledInvoiceForChart,
+} from '@/lib/dashboard-fees'
 
 const log = apiLogger('dashboard/fees-chart-earners')
 
@@ -18,7 +23,7 @@ const EARNER_COLORS = [
 ]
 
 // GET /api/dashboard/fees-chart-earners — admin only
-// Returns per-earner daily cumulative fee data for the current month.
+// Returns per-earner daily cumulative recorded + billed fee data for the current month.
 export async function GET() {
   log.info('GET request received')
   const session = await getServerSession(authOptions)
@@ -37,11 +42,11 @@ export async function GET() {
   const today = now.getDate()
 
   const currentStart = new Date(Date.UTC(year, month, 1))
-  const currentEnd = new Date(Date.UTC(year, month + 1, 0))
-  const daysInCurrent = currentEnd.getUTCDate()
+  const currentEndExclusive = new Date(Date.UTC(year, month + 1, 1))
+  const daysInCurrent = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
 
   try {
-    const [allUsers, feeEntries] = await Promise.all([
+    const [allUsers, feeEntries, billedInvoices] = await Promise.all([
       prisma.user.findMany({
         where: { isActive: true },
         select: { id: true, initials: true, firstName: true, monthlyTargetCents: true },
@@ -49,18 +54,55 @@ export async function GET() {
       }),
       prisma.feeEntry.findMany({
         where: {
-          entryDate: { gte: currentStart, lte: currentEnd },
+          entryDate: { gte: currentStart, lt: currentEndExclusive },
           isBillable: true,
           entryType: { not: 'disbursement' as const },
         },
         select: { feeEarnerId: true, entryDate: true, totalCents: true },
       }),
+      prisma.invoice.findMany({
+        where: {
+          invoiceType: 'invoice',
+          status: { in: ['sent_invoice', 'paid'] },
+          OR: [
+            { sentAt: { gte: currentStart, lt: currentEndExclusive } },
+            { sentAt: null, invoiceDate: { gte: currentStart, lt: currentEndExclusive } },
+          ],
+        },
+        select: {
+          sentAt: true,
+          invoiceDate: true,
+          lineItems: {
+            select: {
+              entryType: true,
+              totalCents: true,
+              feeEntryId: true,
+            },
+          },
+        },
+      }),
     ])
+
+    const billedFeeEntryIds = Array.from(new Set(
+      billedInvoices
+        .flatMap((invoice) => invoice.lineItems.map((lineItem) => lineItem.feeEntryId))
+        .filter((id): id is string => Boolean(id)),
+    ))
+    const billedFeeEntries = billedFeeEntryIds.length
+      ? await prisma.feeEntry.findMany({
+          where: { id: { in: billedFeeEntryIds } },
+          select: { id: true, feeEarnerId: true },
+        })
+      : []
+    const billedFeeEntryEarnerIds = new Map(
+      billedFeeEntries.map((entry) => [entry.id, entry.feeEarnerId]),
+    )
+    const billedEarnerIds = new Set(billedFeeEntries.map((entry) => entry.feeEarnerId))
 
     // Only include earners who have entries this month OR have a target set
     const earnerIdsWithEntries = new Set(feeEntries.map((e) => e.feeEarnerId))
     const activeEarners = allUsers.filter(
-      (u) => earnerIdsWithEntries.has(u.id) || u.monthlyTargetCents != null,
+      (u) => earnerIdsWithEntries.has(u.id) || billedEarnerIds.has(u.id) || u.monthlyTargetCents != null,
     )
 
     // Build per-earner per-day sums
@@ -73,24 +115,28 @@ export async function GET() {
       dayMap.set(d, (dayMap.get(d) ?? 0) + entry.totalCents)
     }
 
-    // Build cumulative daily data with each earner's ID as the key
-    const cumulatives = new Map<string, number>()
-    for (const e of activeEarners) cumulatives.set(e.id, 0)
+    const earnerIds = activeEarners.map((earner) => earner.id)
+    const recordedData = buildEarnerCumulativeData({
+      earnerIds,
+      daysInCurrent,
+      today,
+      earnerDayMap,
+    })
+    const billedData = buildEarnerCumulativeData({
+      earnerIds,
+      daysInCurrent,
+      today,
+      earnerDayMap: bucketBilledInvoicesByEarnerDay(
+        billedInvoices as BilledInvoiceForChart[],
+        billedFeeEntryEarnerIds,
+      ),
+    })
 
-    const data: Array<Record<string, number>> = []
-    for (let d = 1; d <= daysInCurrent; d++) {
-      const point: Record<string, number> = { day: d }
-      for (const earner of activeEarners) {
-        if (d <= today) {
-          const dayVal = earnerDayMap.get(earner.id)?.get(d) ?? 0
-          cumulatives.set(earner.id, (cumulatives.get(earner.id) ?? 0) + dayVal)
-          point[earner.id] = cumulatives.get(earner.id)!
-        }
-      }
-      data.push(point)
-    }
-
-    log.debug('Fees chart earners data:', { earnerCount: activeEarners.length, dataPoints: data.length })
+    log.debug('Fees chart earners data:', {
+      earnerCount: activeEarners.length,
+      dataPoints: recordedData.length,
+      billedDataPoints: billedData.length,
+    })
     log.info('GET completed successfully')
     return NextResponse.json({
       earners: activeEarners.map((e, i) => ({
@@ -100,7 +146,11 @@ export async function GET() {
         monthlyTargetCents: e.monthlyTargetCents,
         color: EARNER_COLORS[i % EARNER_COLORS.length],
       })),
-      data,
+      data: recordedData,
+      series: {
+        recorded: recordedData,
+        billed: billedData,
+      },
       today,
       daysInCurrentMonth: daysInCurrent,
       currentMonthName: currentStart.toLocaleString('en-ZA', { month: 'long', timeZone: 'UTC' }),

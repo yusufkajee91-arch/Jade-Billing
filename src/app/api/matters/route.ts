@@ -109,6 +109,10 @@ export async function POST(request: NextRequest) {
       log.warn('POST unauthorised - no session')
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
+    if (session.user.role !== 'admin' && session.user.role !== 'fee_earner') {
+      log.warn('POST forbidden', { role: session.user.role })
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
 
     const body = await request.json()
     log.debug('POST body:', { clientId: body.clientId, description: body.description, ownerId: body.ownerId })

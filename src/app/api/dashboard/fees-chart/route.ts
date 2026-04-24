@@ -4,11 +4,17 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { apiLogger } from '@/lib/debug'
 import { getWorkingDaysInMonth, cumulativeWorkingDays } from '@/lib/working-days'
+import {
+  bucketBilledInvoicesByDay,
+  bucketFeeEntriesByDay,
+  buildCumulativeSeries,
+  type BilledInvoiceForChart,
+} from '@/lib/dashboard-fees'
 
 const log = apiLogger('dashboard/fees-chart')
 
 // GET /api/dashboard/fees-chart?scope=mine|all
-// Returns daily cumulative fee data for current month + previous month.
+// Returns daily cumulative recorded + billed fee data for current month + previous month.
 export async function GET(request: NextRequest) {
   log.info('GET request received')
   const session = await getServerSession(authOptions)
@@ -17,7 +23,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   }
 
-  const { searchParams } = new URL(request.url)
+  const { searchParams } = request.nextUrl
   const scope = searchParams.get('scope') ?? 'mine'
   const isAdmin = session.user.role === 'admin'
   log.debug('Query params:', { scope, isAdmin })
@@ -28,14 +34,14 @@ export async function GET(request: NextRequest) {
   const today = now.getDate()
 
   const currentStart = new Date(Date.UTC(year, month, 1))
-  const currentEnd = new Date(Date.UTC(year, month + 1, 0))
-  const daysInCurrent = currentEnd.getUTCDate()
+  const currentEndExclusive = new Date(Date.UTC(year, month + 1, 1))
+  const daysInCurrent = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
 
   const prevYear = month === 0 ? year - 1 : year
   const prevMonth = month === 0 ? 11 : month - 1
   const prevStart = new Date(Date.UTC(prevYear, prevMonth, 1))
-  const prevEnd = new Date(Date.UTC(prevYear, prevMonth + 1, 0))
-  const daysInPrev = prevEnd.getUTCDate()
+  const prevEndExclusive = new Date(Date.UTC(prevYear, prevMonth + 1, 1))
+  const daysInPrev = new Date(Date.UTC(prevYear, prevMonth + 1, 0)).getUTCDate()
 
   const earnerFilter = scope === 'all' && isAdmin ? {} : { feeEarnerId: session.user.id }
 
@@ -61,29 +67,78 @@ export async function GET(request: NextRequest) {
 
     const billableFilter = { isBillable: true, entryType: { not: 'disbursement' as const } }
 
-    const [currentEntries, prevEntries] = await Promise.all([
+    const invoiceSelect = {
+      sentAt: true,
+      invoiceDate: true,
+      lineItems: {
+        select: {
+          entryType: true,
+          totalCents: true,
+          feeEntryId: true,
+        },
+      },
+    }
+
+    const [currentEntries, prevEntries, currentBilledInvoices, prevBilledInvoices] = await Promise.all([
       prisma.feeEntry.findMany({
-        where: { ...earnerFilter, ...billableFilter, entryDate: { gte: currentStart, lte: currentEnd } },
+        where: { ...earnerFilter, ...billableFilter, entryDate: { gte: currentStart, lt: currentEndExclusive } },
         select: { entryDate: true, totalCents: true },
       }),
       prisma.feeEntry.findMany({
-        where: { ...earnerFilter, ...billableFilter, entryDate: { gte: prevStart, lte: prevEnd } },
+        where: { ...earnerFilter, ...billableFilter, entryDate: { gte: prevStart, lt: prevEndExclusive } },
         select: { entryDate: true, totalCents: true },
+      }),
+      prisma.invoice.findMany({
+        where: {
+          invoiceType: 'invoice',
+          status: { in: ['sent_invoice', 'paid'] },
+          OR: [
+            { sentAt: { gte: currentStart, lt: currentEndExclusive } },
+            { sentAt: null, invoiceDate: { gte: currentStart, lt: currentEndExclusive } },
+          ],
+        },
+        select: invoiceSelect,
+      }),
+      prisma.invoice.findMany({
+        where: {
+          invoiceType: 'invoice',
+          status: { in: ['sent_invoice', 'paid'] },
+          OR: [
+            { sentAt: { gte: prevStart, lt: prevEndExclusive } },
+            { sentAt: null, invoiceDate: { gte: prevStart, lt: prevEndExclusive } },
+          ],
+        },
+        select: invoiceSelect,
       }),
     ])
 
-    // Aggregate by UTC day number
-    const byDay = (entries: { entryDate: Date; totalCents: number }[]) => {
-      const map = new Map<number, number>()
-      for (const e of entries) {
-        const d = new Date(e.entryDate).getUTCDate()
-        map.set(d, (map.get(d) ?? 0) + e.totalCents)
-      }
-      return map
+    let scopedFeeEntryIds: Set<string> | undefined
+    if (!(scope === 'all' && isAdmin)) {
+      const billedFeeEntryIds = Array.from(new Set(
+        [...currentBilledInvoices, ...prevBilledInvoices]
+          .flatMap((invoice) => invoice.lineItems.map((lineItem) => lineItem.feeEntryId))
+          .filter((id): id is string => Boolean(id)),
+      ))
+
+      const scopedEntries = billedFeeEntryIds.length
+        ? await prisma.feeEntry.findMany({
+            where: { id: { in: billedFeeEntryIds }, feeEarnerId: session.user.id },
+            select: { id: true },
+          })
+        : []
+      scopedFeeEntryIds = new Set(scopedEntries.map((entry) => entry.id))
     }
 
-    const currMap = byDay(currentEntries)
-    const prevMap = byDay(prevEntries)
+    const currMap = bucketFeeEntriesByDay(currentEntries)
+    const prevMap = bucketFeeEntriesByDay(prevEntries)
+    const billedCurrMap = bucketBilledInvoicesByDay(
+      currentBilledInvoices as BilledInvoiceForChart[],
+      scopedFeeEntryIds,
+    )
+    const billedPrevMap = bucketBilledInvoicesByDay(
+      prevBilledInvoices as BilledInvoiceForChart[],
+      scopedFeeEntryIds,
+    )
 
     // Daily target spread across working days (excl. weekends + SA public holidays)
     const workingDays = getWorkingDaysInMonth(year, month)
@@ -91,31 +146,43 @@ export async function GET(request: NextRequest) {
       ? monthlyTargetCents / workingDays
       : null
 
-    type DayData = { day: number; current: number; previous: number; target?: number }
-    const data: DayData[] = []
-    const maxDays = Math.max(daysInCurrent, daysInPrev)
-    let currCum = 0
-    let prevCum = 0
-
-    for (let d = 1; d <= maxDays; d++) {
-      if (d <= daysInCurrent && d <= today) currCum += currMap.get(d) ?? 0
-      if (d <= daysInPrev) prevCum += prevMap.get(d) ?? 0
-      const point: DayData = {
-        day: d,
-        current: d <= today && d <= daysInCurrent ? currCum : 0,
-        previous: d <= daysInPrev ? prevCum : 0,
-      }
-      if (dailyTargetCents != null && d <= daysInCurrent) {
+    const targetForDay = dailyTargetCents != null
+      ? (d: number) => {
+        if (d > daysInCurrent) return undefined
         const wd = cumulativeWorkingDays(year, month, d)
-        point.target = Math.round(dailyTargetCents * wd)
+        return Math.round(dailyTargetCents * wd)
       }
-      data.push(point)
-    }
+      : undefined
 
-    log.debug('Fees chart data:', { dataPoints: data.length, monthlyTargetCents })
+    const recordedData = buildCumulativeSeries({
+      daysInCurrent,
+      daysInPrevious: daysInPrev,
+      today,
+      currentMap: currMap,
+      previousMap: prevMap,
+      targetForDay,
+    })
+    const billedData = buildCumulativeSeries({
+      daysInCurrent,
+      daysInPrevious: daysInPrev,
+      today,
+      currentMap: billedCurrMap,
+      previousMap: billedPrevMap,
+      targetForDay,
+    })
+
+    log.debug('Fees chart data:', {
+      dataPoints: recordedData.length,
+      billedDataPoints: billedData.length,
+      monthlyTargetCents,
+    })
     log.info('GET completed successfully')
     return NextResponse.json({
-      data,
+      data: recordedData,
+      series: {
+        recorded: recordedData,
+        billed: billedData,
+      },
       today,
       daysInCurrentMonth: daysInCurrent,
       monthlyTargetCents,

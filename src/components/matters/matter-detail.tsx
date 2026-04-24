@@ -164,18 +164,6 @@ function formatFileSize(bytes: number | null) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function entryTypeLabel(type: string) {
-  if (type === 'time') return 'T'
-  if (type === 'unitary') return 'U'
-  return 'D'
-}
-
-function entryTypeColor(type: string) {
-  if (type === 'time') return 'text-primary'
-  if (type === 'unitary') return 'text-[hsl(225_28%_64%)]'
-  return 'text-muted-foreground'
-}
-
 // ─── Fee Entries Tab ──────────────────────────────────────────────────────────
 
 function FeeEntriesTab({
@@ -266,20 +254,6 @@ function FeeEntriesTab({
     setSelected(new Set())
     load()
     onEntryChanged()
-  }
-
-  const toggleBillable = async (entry: FeeEntry) => {
-    const res = await fetch(`/api/fee-entries/${entry.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ isBillable: !entry.isBillable }),
-    })
-    if (res.ok) {
-      load()
-      onEntryChanged()
-    } else {
-      toast.error('Failed to update entry')
-    }
   }
 
   const totalCombined = summary.feesCents + summary.disbCents
@@ -427,14 +401,6 @@ function FeeEntriesTab({
                 <span className="font-sans text-xs text-muted-foreground">
                   {formatDate(entry.entryDate)}
                 </span>
-                <div className="flex items-center gap-1 mt-0.5">
-                  <span
-                    className={`font-sans text-[10px] font-bold uppercase ${entryTypeColor(entry.entryType)}`}
-                    title={entry.entryType}
-                  >
-                    {entryTypeLabel(entry.entryType)}
-                  </span>
-                </div>
               </div>
               <div style={{ width: 140, flexShrink: 0 }} className="self-start">
                 <span className="font-sans text-xs text-foreground">
@@ -889,8 +855,7 @@ interface AssociatedMatter {
 }
 
 function AssociatedMattersTab({ matterId }: { matterId: string }) {
-  const [associations, setAssociations] = useState<AssociatedMatter[]>([])
-  const [loading, setLoading] = useState(true)
+  const [associations, setAssociations] = useState<AssociatedMatter[] | null>(null)
   const [search, setSearch] = useState('')
   const [searchResults, setSearchResults] = useState<{ id: string; matterCode: string; description: string; client: { clientName: string } }[]>([])
   const [searching, setSearching] = useState(false)
@@ -898,13 +863,15 @@ function AssociatedMattersTab({ matterId }: { matterId: string }) {
   const searchRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const load = useCallback(async () => {
-    setLoading(true)
     const res = await fetch(`/api/matters/${matterId}/associations`)
     if (res.ok) setAssociations(await res.json())
-    setLoading(false)
+    else setAssociations([])
   }, [matterId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => { void load() }, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [load])
 
   const handleSearch = (q: string) => {
     setSearch(q)
@@ -957,7 +924,7 @@ function AssociatedMattersTab({ matterId }: { matterId: string }) {
     borderBottom: '1px solid rgba(216,211,203,0.4)',
   }
 
-  if (loading) return <p style={{ fontFamily: 'var(--font-noto-sans)', fontSize: 13, color: '#80796F' }}>Loading…</p>
+  if (associations === null) return <p style={{ fontFamily: 'var(--font-noto-sans)', fontSize: 13, color: '#80796F' }}>Loading…</p>
 
   return (
     <div className="space-y-5">
@@ -1258,7 +1225,6 @@ interface MatterDetailProps {
 
 export function MatterDetail({ matter: initialMatter, session }: MatterDetailProps) {
   log.info('mount', { matterId: initialMatter.id, matterCode: initialMatter.matterCode, status: initialMatter.status })
-  const router = useRouter()
   const [matter, setMatter] = useState(initialMatter)
   const [activeTab, setActiveTab] = useState('fees')
   const [editSheetOpen, setEditSheetOpen] = useState(false)

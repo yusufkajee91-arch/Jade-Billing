@@ -24,6 +24,7 @@ export async function createMatter(request: APIRequestContext, data: {
   description: string
   ownerId?: string
   matterTypeId?: string
+  userIds?: string[]
 }) {
   const res = await request.post(`${BASE}/api/matters`, {
     data: {
@@ -31,6 +32,7 @@ export async function createMatter(request: APIRequestContext, data: {
       description: data.description,
       ownerId: data.ownerId || 'seed-admin-user',
       matterTypeId: data.matterTypeId || 'seed-mt-general',
+      userIds: data.userIds,
     },
   })
   return res.json()

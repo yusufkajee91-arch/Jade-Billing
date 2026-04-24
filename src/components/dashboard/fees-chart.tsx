@@ -36,7 +36,10 @@ interface ChartPayload {
   daysInCurrentMonth: number
   monthlyTargetCents: number | null
   data: DayData[]
+  series?: Record<ChartSeries, DayData[]>
 }
+
+type ChartSeries = 'recorded' | 'billed'
 
 // ─── Custom tooltip ───────────────────────────────────────────────────────────
 
@@ -122,6 +125,7 @@ export function FeesChart({
   bare?: boolean
 }) {
   const [scope, setScope] = useState<'mine' | 'all'>(defaultScope)
+  const [series, setSeries] = useState<ChartSeries>('recorded')
   const canToggle = isAdmin && showScopeToggle
   const [chart, setChart] = useState<ChartPayload | null>(null)
   const [loading, setLoading] = useState(true)
@@ -129,7 +133,6 @@ export function FeesChart({
   const [chartSize, setChartSize] = useState({ width: 0, height: 0 })
 
   useEffect(() => {
-    setLoading(true)
     fetch(`/api/dashboard/fees-chart?scope=${scope}`)
       .then((r) => r.json())
       .then((data) => setChart(data))
@@ -161,8 +164,9 @@ export function FeesChart({
     }
   }, [])
 
+  const visibleData = chart?.series?.[series] ?? chart?.data ?? []
   const maxDay = chart
-    ? chart.data[chart.data.length - 1]?.day ?? chart.daysInCurrentMonth
+    ? visibleData[visibleData.length - 1]?.day ?? chart.daysInCurrentMonth
     : 31
   const xTicks = chart
     ? [1, 5, 10, 15, 20, 25, maxDay].filter((d, i, arr) => arr.indexOf(d) === i)
@@ -171,9 +175,7 @@ export function FeesChart({
   const header = (
     <div className="flex items-center justify-between mb-4">
       <div>
-        <p style={{ fontFamily: 'var(--font-noto-sans)', fontSize: 9, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#80796F', marginBottom: 6 }}>
-          Fees Recorded
-        </p>
+        <SeriesToggle series={series} onChange={setSeries} />
         <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 20, color: '#2C2C2A', fontWeight: 400, lineHeight: 1.2 }}>
           {chart?.currentMonthName ?? '…'} — Cumulative
         </h2>
@@ -232,7 +234,7 @@ export function FeesChart({
               Loading…
             </p>
           </div>
-        ) : !chart?.data?.length ? (
+        ) : !chart || !visibleData.length ? (
           <div className="h-full flex items-center justify-center text-center">
             <p style={{ fontFamily: 'var(--font-noto-sans)', fontSize: 13, color: '#80796F' }}>
               No fee entries yet this month.<br />Record time to see your chart.
@@ -250,7 +252,7 @@ export function FeesChart({
           <AreaChart
             width={chartSize.width}
             height={chartSize.height}
-            data={chart.data}
+            data={visibleData}
             margin={{ top: 4, right: 4, left: 8, bottom: 0 }}
           >
               <defs>
@@ -353,6 +355,49 @@ export function FeesChart({
     <div className="glass-card glass-card-no-hover">
       {header}
       {body}
+    </div>
+  )
+}
+
+function SeriesToggle({
+  series,
+  onChange,
+}: {
+  series: ChartSeries
+  onChange: (series: ChartSeries) => void
+}) {
+  return (
+    <div
+      className="inline-flex items-center gap-0.5 p-0.5 rounded-full mb-2"
+      style={{ background: 'rgba(74, 72, 69, 0.07)' }}
+      aria-label="Fee chart series"
+    >
+      {([
+        ['recorded', 'Fees Recorded'],
+        ['billed', 'Fees Billed'],
+      ] as const).map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => onChange(value)}
+          aria-pressed={series === value}
+          style={{
+            fontFamily: 'var(--font-noto-sans)',
+            fontSize: 9,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            padding: '4px 9px',
+            borderRadius: 999,
+            transition: 'all 0.2s',
+            background: series === value ? 'rgba(255,252,250,0.95)' : 'transparent',
+            color: series === value ? '#2C2C2A' : '#80796F',
+            boxShadow: series === value ? '0 1px 3px rgba(74,72,69,0.10)' : 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   )
 }

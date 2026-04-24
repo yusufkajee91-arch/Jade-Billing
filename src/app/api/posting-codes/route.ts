@@ -23,11 +23,6 @@ export async function GET() {
       log.warn('GET rejected: unauthorised')
       return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
     }
-    if (session.user.role !== 'admin') {
-      log.warn('GET rejected: forbidden', { role: session.user.role })
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
     const postingCodes = await prisma.postingCode.findMany({
       orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
     })

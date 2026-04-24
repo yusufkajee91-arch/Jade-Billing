@@ -697,14 +697,20 @@ export function FeeEntryForm({
               onValueChange={(v) => setValue('postingCodeId', v || null)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="None" />
+                <SelectValue>
+                  {(value) => {
+                    if (!value) return 'None'
+                    const selectedPostingCode = postingCodes.find((pc) => pc.id === value)
+                    return selectedPostingCode?.code ?? value
+                  }}
+                </SelectValue>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="w-[min(24rem,calc(100vw-2rem))] max-w-[calc(100vw-2rem)]">
                 <SelectItem value="">None</SelectItem>
                 {postingCodes.map((pc) => (
-                  <SelectItem key={pc.id} value={pc.id}>
-                    <span className="font-sans mr-2">{pc.code}</span>
-                    {pc.description}
+                  <SelectItem key={pc.id} value={pc.id} textClassName="shrink whitespace-normal">
+                    <span className="font-sans mr-2 shrink-0">{pc.code}</span>
+                    <span>{pc.description}</span>
                   </SelectItem>
                 ))}
               </SelectContent>

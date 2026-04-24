@@ -23,10 +23,13 @@ interface Earner {
 interface ChartData {
   earners: Earner[]
   data: Array<Record<string, number>>
+  series?: Record<ChartSeries, Array<Record<string, number>>>
   today: number
   daysInCurrentMonth: number
   currentMonthName: string
 }
+
+type ChartSeries = 'recorded' | 'billed'
 
 function formatY(cents: number): string {
   if (cents >= 100_000_000) return `R${(cents / 100_000_000).toFixed(0)}m`
@@ -76,6 +79,7 @@ function EarnersTooltip({
 
 export function AllEarnersChart() {
   const [chart, setChart] = useState<ChartData | null>(null)
+  const [series, setSeries] = useState<ChartSeries>('recorded')
   const [loading, setLoading] = useState(true)
   const chartContainerRef = useRef<HTMLDivElement | null>(null)
   const [chartSize, setChartSize] = useState({ width: 0, height: 0 })
@@ -112,6 +116,7 @@ export function AllEarnersChart() {
     }
   }, [])
 
+  const visibleData = chart?.series?.[series] ?? chart?.data ?? []
   const xTicks = chart
     ? [1, 5, 10, 15, 20, 25, chart.daysInCurrentMonth].filter(
         (d, i, arr) => arr.indexOf(d) === i,
@@ -123,9 +128,7 @@ export function AllEarnersChart() {
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div>
-          <p className="font-sans text-[10px] tracking-widest uppercase text-muted-foreground mb-1">
-            All Fee Earners
-          </p>
+          <SeriesToggle series={series} onChange={setSeries} />
           <h2 className="font-serif text-xl font-normal text-foreground">
             {chart?.currentMonthName ?? '…'} — Cumulative by Earner
           </h2>
@@ -155,7 +158,7 @@ export function AllEarnersChart() {
           <div className="h-full flex items-center justify-center text-muted-foreground font-sans text-xs tracking-wide uppercase animate-pulse">
             Loading…
           </div>
-        ) : !chart?.earners?.length ? (
+        ) : !chart?.earners?.length || !visibleData.length ? (
           <div className="h-full flex items-center justify-center text-muted-foreground font-sans text-xs text-center">
             No fee entries recorded this month.
           </div>
@@ -167,7 +170,7 @@ export function AllEarnersChart() {
           <LineChart
             width={chartSize.width}
             height={chartSize.height}
-            data={chart.data}
+            data={visibleData}
             margin={{ top: 4, right: 4, left: 8, bottom: 0 }}
           >
               <CartesianGrid
@@ -214,6 +217,49 @@ export function AllEarnersChart() {
           </LineChart>
         )}
       </div>
+    </div>
+  )
+}
+
+function SeriesToggle({
+  series,
+  onChange,
+}: {
+  series: ChartSeries
+  onChange: (series: ChartSeries) => void
+}) {
+  return (
+    <div
+      className="inline-flex items-center gap-0.5 p-0.5 rounded-full mb-2"
+      style={{ background: 'rgba(74, 72, 69, 0.07)' }}
+      aria-label="All earners chart series"
+    >
+      {([
+        ['recorded', 'Fees Recorded'],
+        ['billed', 'Fees Billed'],
+      ] as const).map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => onChange(value)}
+          aria-pressed={series === value}
+          style={{
+            fontFamily: 'var(--font-noto-sans)',
+            fontSize: 9,
+            letterSpacing: '0.14em',
+            textTransform: 'uppercase',
+            padding: '4px 9px',
+            borderRadius: 999,
+            transition: 'all 0.2s',
+            background: series === value ? 'rgba(255,252,250,0.95)' : 'transparent',
+            color: series === value ? '#2C2C2A' : '#80796F',
+            boxShadow: series === value ? '0 1px 3px rgba(74,72,69,0.10)' : 'none',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   )
 }

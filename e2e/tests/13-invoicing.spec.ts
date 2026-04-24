@@ -226,3 +226,195 @@ test.describe('US-013: Invoicing', () => {
     expect(body.error).toBeTruthy()
   })
 })
+
+test.describe('US-013: Pro Forma Invoice lifecycle', () => {
+  let matterId: string
+
+  test.beforeAll(async ({ request }) => {
+    const suffix = uniqueSuffix()
+    const client = await createClient(request, {
+      clientName: `Pro Forma Client ${suffix}`,
+      clientCode: uniqueCode('PRO'),
+      entityType: 'company_pty',
+      emailGeneral: `pro-forma-${suffix}@example.com`,
+    })
+
+    const matter = await createMatter(request, {
+      clientId: client.id,
+      description: `Pro forma test matter ${suffix}`,
+    })
+    matterId = matter.id
+  })
+
+  async function freshEntry(request: Parameters<typeof createFeeEntry>[0], narration: string) {
+    return createFeeEntry(request, {
+      matterId,
+      narration,
+      billedMinutes: 60,
+      rateCents: 200000,
+    })
+  }
+
+  test('POST with invoiceType=pro_forma creates invoice in draft_pro_forma status', async ({ request }) => {
+    const entry = await freshEntry(request, 'Pro forma create check')
+
+    const res = await request.post(`${BASE}/api/invoices`, {
+      data: {
+        matterId,
+        feeEntryIds: [entry.id],
+        invoiceType: 'pro_forma',
+        invoiceDate: todayISO(),
+      },
+    })
+    expect(res.ok()).toBeTruthy()
+    const invoice = await res.json()
+    expect(invoice.invoiceType).toBe('pro_forma')
+    expect(invoice.status).toBe('draft_pro_forma')
+    expect(invoice.invoiceNumber).toMatch(/^INV-\d{4,}$/)
+    expect(invoice.sentAt).toBeNull()
+  })
+
+  test('draft_pro_forma → sent_pro_forma transition stamps sentAt and persists', async ({ request }) => {
+    const entry = await freshEntry(request, 'Pro forma send check')
+
+    const createRes = await request.post(`${BASE}/api/invoices`, {
+      data: {
+        matterId,
+        feeEntryIds: [entry.id],
+        invoiceType: 'pro_forma',
+        invoiceDate: todayISO(),
+      },
+    })
+    expect(createRes.ok()).toBeTruthy()
+    const invoice = await createRes.json()
+
+    const transitionRes = await request.patch(`${BASE}/api/invoices/${invoice.id}`, {
+      data: { action: 'transition', status: 'sent_pro_forma' },
+    })
+    expect(transitionRes.ok()).toBeTruthy()
+    const updated = await transitionRes.json()
+    expect(updated.status).toBe('sent_pro_forma')
+    expect(updated.sentAt).not.toBeNull()
+
+    const refetched = await request.get(`${BASE}/api/invoices/${invoice.id}`)
+    expect(refetched.ok()).toBeTruthy()
+    const persisted = await refetched.json()
+    expect(persisted.status).toBe('sent_pro_forma')
+    expect(persisted.sentAt).not.toBeNull()
+  })
+
+  test('sent_pro_forma → draft_invoice upgrade keeps invoice but switches status', async ({ request }) => {
+    const entry = await freshEntry(request, 'Pro forma upgrade check')
+
+    const createRes = await request.post(`${BASE}/api/invoices`, {
+      data: {
+        matterId,
+        feeEntryIds: [entry.id],
+        invoiceType: 'pro_forma',
+        invoiceDate: todayISO(),
+      },
+    })
+    const invoice = await createRes.json()
+
+    await request.patch(`${BASE}/api/invoices/${invoice.id}`, {
+      data: { action: 'transition', status: 'sent_pro_forma' },
+    })
+
+    const upgradeRes = await request.patch(`${BASE}/api/invoices/${invoice.id}`, {
+      data: { action: 'transition', status: 'draft_invoice' },
+    })
+    expect(upgradeRes.ok()).toBeTruthy()
+    const upgraded = await upgradeRes.json()
+    expect(upgraded.status).toBe('draft_invoice')
+    expect(upgraded.id).toBe(invoice.id)
+    expect(upgraded.invoiceNumber).toBe(invoice.invoiceNumber)
+  })
+
+  test('draft_pro_forma → draft_invoice direct upgrade is allowed', async ({ request }) => {
+    const entry = await freshEntry(request, 'Pro forma direct upgrade check')
+
+    const createRes = await request.post(`${BASE}/api/invoices`, {
+      data: {
+        matterId,
+        feeEntryIds: [entry.id],
+        invoiceType: 'pro_forma',
+        invoiceDate: todayISO(),
+      },
+    })
+    const invoice = await createRes.json()
+
+    const upgradeRes = await request.patch(`${BASE}/api/invoices/${invoice.id}`, {
+      data: { action: 'transition', status: 'draft_invoice' },
+    })
+    expect(upgradeRes.ok()).toBeTruthy()
+    const upgraded = await upgradeRes.json()
+    expect(upgraded.status).toBe('draft_invoice')
+  })
+
+  test('invalid transition draft_pro_forma → sent_invoice is rejected with 409', async ({ request }) => {
+    const entry = await freshEntry(request, 'Pro forma invalid transition check')
+
+    const createRes = await request.post(`${BASE}/api/invoices`, {
+      data: {
+        matterId,
+        feeEntryIds: [entry.id],
+        invoiceType: 'pro_forma',
+        invoiceDate: todayISO(),
+      },
+    })
+    const invoice = await createRes.json()
+
+    const badRes = await request.patch(`${BASE}/api/invoices/${invoice.id}`, {
+      data: { action: 'transition', status: 'sent_invoice' },
+    })
+    expect(badRes.status()).toBe(409)
+  })
+
+  test('sent_pro_forma cannot revert to draft_pro_forma (no backwards transition)', async ({ request }) => {
+    const entry = await freshEntry(request, 'Pro forma no-revert check')
+
+    const createRes = await request.post(`${BASE}/api/invoices`, {
+      data: {
+        matterId,
+        feeEntryIds: [entry.id],
+        invoiceType: 'pro_forma',
+        invoiceDate: todayISO(),
+      },
+    })
+    const invoice = await createRes.json()
+
+    await request.patch(`${BASE}/api/invoices/${invoice.id}`, {
+      data: { action: 'transition', status: 'sent_pro_forma' },
+    })
+
+    const revertRes = await request.patch(`${BASE}/api/invoices/${invoice.id}`, {
+      data: { action: 'transition', status: 'draft_pro_forma' as never },
+    })
+    expect(revertRes.ok()).toBeFalsy()
+  })
+
+  test('UI: create pro forma via form selects Pro Forma type and lands on draft_pro_forma', async ({ page, request }) => {
+    const entry = await freshEntry(request, 'Pro forma UI flow check')
+
+    await page.goto(`/invoices/new?matterId=${matterId}&entries=${entry.id}`)
+    await expect(page.getByText('New Invoice')).toBeVisible({ timeout: 5000 })
+
+    // Open the Invoice Type select and pick Pro Forma Invoice
+    await page.getByRole('combobox').first().click()
+    await page.getByRole('option', { name: /Pro Forma Invoice/i }).click()
+
+    const createBtn = page.getByRole('button', { name: /Create Pro Forma|Create Invoice|Create/i }).last()
+    await createBtn.click()
+
+    // Wait for redirect to the created invoice — URL contains a UUID, not "new"
+    await page.waitForURL(/\/invoices\/[0-9a-f]{8}-[0-9a-f]{4}-/, { timeout: 10000 })
+
+    const urlMatch = page.url().match(/\/invoices\/([0-9a-f-]{36})/)
+    expect(urlMatch).not.toBeNull()
+    const newId = urlMatch![1]
+    const refetched = await request.get(`${BASE}/api/invoices/${newId}`)
+    const persisted = await refetched.json()
+    expect(persisted.invoiceType).toBe('pro_forma')
+    expect(persisted.status).toBe('draft_pro_forma')
+  })
+})

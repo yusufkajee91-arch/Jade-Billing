@@ -39,6 +39,11 @@ export async function GET(request: NextRequest) {
     const limit = limitParam ? Math.min(500, Math.max(1, parseInt(limitParam, 10))) : undefined
     log.debug('GET params:', { matterId, limit })
 
+    if (!matterId && session.user.role !== 'admin') {
+      log.warn('GET rejected: firm-wide journal is admin-only', { role: session.user.role })
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const entries = await prisma.trustEntry.findMany({
       where: matterId ? { matterId } : {},
       include: { supplier: { select: { id: true, name: true } } },

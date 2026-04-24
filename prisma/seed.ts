@@ -189,7 +189,7 @@ async function main() {
 
   for (const account of glAccounts) {
     await prisma.glAccount.upsert({
-      where: { id: account.id },
+      where: { code: account.code },
       update: {},
       create: account,
     })

@@ -39,6 +39,7 @@ import { generateMatterCode } from '@/lib/matter-code'
 
 const adminSession = { user: { id: 'admin-1', role: 'admin' } }
 const feeEarnerSession = { user: { id: 'user-2', role: 'fee_earner' } }
+const assistantSession = { user: { id: 'assistant-1', role: 'assistant' } }
 
 const mockMatter = {
   id: 'matter-1',
@@ -100,6 +101,9 @@ async function handleCreateMatter(
   session: { user: { id: string; role: string } } | null,
 ) {
   if (!session) return { status: 401, body: { error: 'Unauthorised' } }
+  if (session.user.role !== 'admin' && session.user.role !== 'fee_earner') {
+    return { status: 403, body: { error: 'Forbidden' } }
+  }
 
   const { clientId, description, ownerId, userIds } = body as {
     clientId?: string
@@ -284,6 +288,14 @@ describe('POST /api/matters', () => {
       feeEarnerSession,
     )
     expect(res.status).toBe(400)
+  })
+
+  it('blocks assistant matter creation', async () => {
+    const res = await handleCreateMatter(
+      { clientId: 'client-1', description: 'Test', ownerId: 'user-2' },
+      assistantSession,
+    )
+    expect(res.status).toBe(403)
   })
 })
 

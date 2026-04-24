@@ -58,6 +58,8 @@ test-results/
 
 # Claude Code
 .claude/
+.mcp.json
+.trello-audit-cache/
 
 # local DB snapshots (production pg_dump)
 Documentation/Recon/snapshots/

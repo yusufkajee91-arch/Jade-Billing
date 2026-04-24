@@ -38,6 +38,7 @@ interface NavItem {
   href: string
   icon: React.ReactNode
   trust?: boolean
+  adminOnly?: boolean
 }
 
 interface NavGroup {
@@ -68,7 +69,7 @@ const navGroups: NavGroup[] = [
   {
     label: 'Accounts',
     items: [
-      { label: 'Trust Account', href: '/trust', icon: <Landmark className="h-[18px] w-[18px]" />, trust: true },
+      { label: 'Trust Account', href: '/trust', icon: <Landmark className="h-[18px] w-[18px]" />, trust: true, adminOnly: true },
       { label: 'Business Account', href: '/business', icon: <Building2 className="h-[18px] w-[18px]" /> },
       { label: 'Bank Recon', href: '/reconciliation', icon: <ArrowLeftRight className="h-[18px] w-[18px]" /> },
       { label: 'Collections', href: '/collections', icon: <CreditCard className="h-[18px] w-[18px]" /> },
@@ -228,9 +229,11 @@ export function Sidebar({ mobileOpen = false, onMobileClose }: SidebarProps) {
                   {group.label}
                 </p>
               )}
-              {group.items.map((item) => (
-                <NavItemComponent key={item.href} item={item} />
-              ))}
+              {group.items
+                .filter((item) => !item.adminOnly || isAdmin)
+                .map((item) => (
+                  <NavItemComponent key={item.href} item={item} />
+                ))}
             </div>
           ))}
 
